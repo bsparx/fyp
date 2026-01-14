@@ -1,0 +1,93 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+// prisma/schema.prisma
+datasource db {
+  provider  = "postgresql"
+  // uncomment next line if you use Prisma <5.10
+  // directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Role {
+  ADMINISTRATOR
+  DOCTOR
+  PATIENT
+}
+
+enum DocumentType {
+  RAG
+  PATIENT
+}
+
+model User {
+  id          String   @id @default(cuid())
+  clerkId     String   @unique
+  email       String   @unique
+  name        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  role        Role     @default(PATIENT)
+  documents   Document[]
+}
+
+model Document {
+  id              String       @id @default(cuid())
+  title           String
+  content         String       @db.Text
+  pdfUrl          String?
+  type            DocumentType @default(RAG)
+  isIngested      Boolean      @default(false)
+  
+  // Optional relation to User (who this document belongs to)
+  userId          String?
+  user            User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // RAG document chunks stored in Pinecone
+  ragChunks       RagChunk[]
+  parentChunks    ParentChunk[]
+}
+
+// Stores parent chunk text to avoid redundancy in Pinecone metadata
+model ParentChunk {
+  id              String   @id @default(cuid())
+  documentId      String
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  parentIndex     Int
+  parentText      String   @db.Text
+  
+  createdAt       DateTime @default(now())
+  
+  // All child chunks reference this parent
+  ragChunks       RagChunk[]
+  
+  @@unique([documentId, parentIndex])
+}
+
+model RagChunk {
+  id              String   @id @default(cuid())
+  documentId      String
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  // Reference to parent chunk instead of storing parent text directly
+  parentChunkId   String
+  parentChunk     ParentChunk @relation(fields: [parentChunkId], references: [id], onDelete: Cascade)
+  
+  chunkIndex      Int
+  chunkText       String   @db.Text
+  pineconeId      String   @unique
+  
+  createdAt       DateTime @default(now())
+}
+

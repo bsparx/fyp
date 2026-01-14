@@ -1,0 +1,286 @@
+"use server";
+
+import prisma from "@/utils/db";
+import {
+  deleteDocumentVectors,
+  querySimilarDocuments,
+  getParentTexts,
+} from "@/utils/embeddings";
+import { revalidatePath } from "next/cache";
+
+export interface DocumentWithStats {
+  id: string;
+  title: string;
+  content: string;
+  pdfUrl: string | null;
+  isIngested: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  _count: {
+    ragChunks: number;
+    parentChunks: number;
+  };
+}
+
+export interface DatabaseStats {
+  totalDocuments: number;
+  ingestedDocuments: number;
+  totalParentChunks: number;
+  totalRagChunks: number;
+  documentsPerDay: { date: string; count: number }[];
+  chunksPerDocument: {
+    title: string;
+    parentChunks: number;
+    ragChunks: number;
+  }[];
+  ingestionRate: number;
+  avgChunksPerDocument: number;
+  recentDocuments: {
+    id: string;
+    title: string;
+    createdAt: Date;
+    isIngested: boolean;
+  }[];
+}
+
+export interface ParentSearchResult {
+  parentChunkId: string;
+  parentText: string;
+  documentId: string;
+  documentTitle: string;
+  score: number;
+  childMatches: number;
+}
+
+/**
+ * Get all documents with their chunk counts
+ */
+export async function getDocuments(): Promise<DocumentWithStats[]> {
+  const documents = await prisma.document.findMany({
+    include: {
+      _count: {
+        select: {
+          ragChunks: true,
+          parentChunks: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return documents;
+}
+
+/**
+ * Delete a document and all its vectors
+ */
+export async function deleteDocument(
+  documentId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // First delete vectors from Pinecone
+    await deleteDocumentVectors(documentId);
+
+    // Then delete the document from database
+    await prisma.document.delete({
+      where: { id: documentId },
+    });
+
+    revalidatePath("/dashboard/database");
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting document:", error);
+    return { success: false, error: "Failed to delete document" };
+  }
+}
+
+/**
+ * Get database statistics for the stats page
+ */
+export async function getDatabaseStats(): Promise<DatabaseStats> {
+  // Get total counts
+  const [totalDocuments, ingestedDocuments, totalParentChunks, totalRagChunks] =
+    await Promise.all([
+      prisma.document.count(),
+      prisma.document.count({ where: { isIngested: true } }),
+      prisma.parentChunk.count(),
+      prisma.ragChunk.count(),
+    ]);
+
+  // Get documents per day (last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const documentsPerDayRaw = await prisma.document.groupBy({
+    by: ["createdAt"],
+    _count: { id: true },
+    where: {
+      createdAt: { gte: thirtyDaysAgo },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Aggregate by date
+  const documentsPerDayMap = new Map<string, number>();
+  documentsPerDayRaw.forEach((item) => {
+    const date = item.createdAt.toISOString().split("T")[0];
+    documentsPerDayMap.set(
+      date,
+      (documentsPerDayMap.get(date) || 0) + item._count.id
+    );
+  });
+
+  const documentsPerDay = Array.from(documentsPerDayMap.entries()).map(
+    ([date, count]) => ({
+      date,
+      count,
+    })
+  );
+
+  // Get chunks per document (top 10)
+  const chunksPerDocumentRaw = await prisma.document.findMany({
+    select: {
+      title: true,
+      _count: {
+        select: {
+          parentChunks: true,
+          ragChunks: true,
+        },
+      },
+    },
+    where: { isIngested: true },
+    orderBy: {
+      ragChunks: { _count: "desc" },
+    },
+    take: 10,
+  });
+
+  const chunksPerDocument = chunksPerDocumentRaw.map((doc) => ({
+    title:
+      doc.title.length > 30 ? doc.title.substring(0, 30) + "..." : doc.title,
+    parentChunks: doc._count.parentChunks,
+    ragChunks: doc._count.ragChunks,
+  }));
+
+  // Get recent documents
+  const recentDocuments = await prisma.document.findMany({
+    select: {
+      id: true,
+      title: true,
+      createdAt: true,
+      isIngested: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
+
+  // Calculate averages
+  const ingestionRate =
+    totalDocuments > 0 ? (ingestedDocuments / totalDocuments) * 100 : 0;
+  const avgChunksPerDocument =
+    ingestedDocuments > 0 ? totalRagChunks / ingestedDocuments : 0;
+
+  return {
+    totalDocuments,
+    ingestedDocuments,
+    totalParentChunks,
+    totalRagChunks,
+    documentsPerDay,
+    chunksPerDocument,
+    ingestionRate,
+    avgChunksPerDocument,
+    recentDocuments,
+  };
+}
+
+/**
+ * Search the vector database and return top parent chunks with scores
+ * Uses parent document RAG to aggregate child chunk scores by parent
+ */
+export async function searchVectorDatabase(
+  query: string,
+  topK: number = 50
+): Promise<ParentSearchResult[]> {
+  if (!query.trim()) {
+    return [];
+  }
+
+  try {
+    // Query for more results to aggregate by parent
+    const childResults = await querySimilarDocuments(query, topK);
+
+    if (childResults.length === 0) {
+      return [];
+    }
+
+    // Aggregate scores by parent chunk using reciprocal rank fusion
+    const parentScores = new Map<
+      string,
+      {
+        totalScore: number;
+        maxScore: number;
+        childMatches: number;
+        documentId: string;
+        documentTitle: string;
+      }
+    >();
+
+    childResults.forEach((result, index) => {
+      // Skip results with missing parentChunkId
+      if (!result.parentChunkId) {
+        return;
+      }
+      
+      const existing = parentScores.get(result.parentChunkId);
+      // Reciprocal rank contribution
+      const rrfScore = 1 / (index + 60); // k=60 is common for RRF
+
+      if (existing) {
+        existing.totalScore += rrfScore;
+        existing.maxScore = Math.max(existing.maxScore, result.score);
+        existing.childMatches += 1;
+      } else {
+        parentScores.set(result.parentChunkId, {
+          totalScore: rrfScore,
+          maxScore: result.score,
+          childMatches: 1,
+          documentId: result.documentId,
+          documentTitle: result.documentTitle,
+        });
+      }
+    });
+
+    // Sort parents by their aggregated score
+    const sortedParents = Array.from(parentScores.entries())
+      .sort((a, b) => {
+        // Primary: total RRF score, Secondary: max similarity score
+        const scoreDiff = b[1].totalScore - a[1].totalScore;
+        if (Math.abs(scoreDiff) > 0.001) return scoreDiff;
+        return b[1].maxScore - a[1].maxScore;
+      })
+      .slice(0, 10);
+
+    // Fetch parent texts
+    const parentChunkIds = sortedParents.map(([id]) => id);
+    const parentTexts = await getParentTexts(parentChunkIds);
+
+    // Build final results
+    const results: ParentSearchResult[] = sortedParents.map(
+      ([parentChunkId, data]) => ({
+        parentChunkId,
+        parentText: parentTexts.get(parentChunkId) || "",
+        documentId: data.documentId,
+        documentTitle: data.documentTitle,
+        score: data.maxScore,
+        childMatches: data.childMatches,
+      })
+    );
+
+    return results;
+  } catch (error) {
+    console.error("Error searching vector database:", error);
+    return [];
+  }
+}
