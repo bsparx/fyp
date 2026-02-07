@@ -14,6 +14,7 @@ export interface DocumentWithStats {
   content: string;
   pdfUrl: string | null;
   isIngested: boolean;
+  ragSubtype: "MEDICINE" | "DISEASE" | null;
   createdAt: Date;
   updatedAt: Date;
   _count: {
@@ -57,6 +58,9 @@ export interface ParentSearchResult {
  */
 export async function getDocuments(): Promise<DocumentWithStats[]> {
   const documents = await prisma.document.findMany({
+    where: {
+      type: "RAG", // Only show RAG documents, exclude PATIENT documents
+    },
     include: {
       _count: {
         select: {
@@ -100,11 +104,11 @@ export async function deleteDocument(
  * Get database statistics for the stats page
  */
 export async function getDatabaseStats(): Promise<DatabaseStats> {
-  // Get total counts
+  // Get total counts (only RAG documents, exclude PATIENT)
   const [totalDocuments, ingestedDocuments, totalParentChunks, totalRagChunks] =
     await Promise.all([
-      prisma.document.count(),
-      prisma.document.count({ where: { isIngested: true } }),
+      prisma.document.count({ where: { type: "RAG" } }),
+      prisma.document.count({ where: { type: "RAG", isIngested: true } }),
       prisma.parentChunk.count(),
       prisma.ragChunk.count(),
     ]);
@@ -117,6 +121,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     by: ["createdAt"],
     _count: { id: true },
     where: {
+      type: "RAG", // Only RAG documents
       createdAt: { gte: thirtyDaysAgo },
     },
     orderBy: { createdAt: "asc" },
@@ -150,7 +155,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
         },
       },
     },
-    where: { isIngested: true },
+    where: { type: "RAG", isIngested: true }, // Only RAG documents
     orderBy: {
       ragChunks: { _count: "desc" },
     },
@@ -164,7 +169,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     ragChunks: doc._count.ragChunks,
   }));
 
-  // Get recent documents
+  // Get recent documents (only RAG documents)
   const recentDocuments = await prisma.document.findMany({
     select: {
       id: true,
@@ -172,6 +177,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
       createdAt: true,
       isIngested: true,
     },
+    where: { type: "RAG" }, // Only RAG documents
     orderBy: { createdAt: "desc" },
     take: 5,
   });
@@ -198,18 +204,37 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
 /**
  * Search the vector database and return top parent chunks with scores
  * Uses parent document RAG to aggregate child chunk scores by parent
+ * @param query - Search query
+ * @param topK - Number of child results to fetch before aggregating
+ * @param typeFilter - Filter by document type: "medicine", "disease", or "all" (default: "all")
  */
 export async function searchVectorDatabase(
   query: string,
-  topK: number = 50
+  topK: number = 50,
+  typeFilter: "medicine" | "disease" | "all" = "all"
 ): Promise<ParentSearchResult[]> {
   if (!query.trim()) {
     return [];
   }
 
   try {
+    // Build filter - ALWAYS exclude patient documents
+    let filter: Record<string, unknown>;
+
+    if (typeFilter === "all") {
+      // Query both medicine and disease, but NEVER patient
+      filter = {
+        type: { $in: ["medicine", "disease"] },
+      };
+    } else {
+      // Query specific type (medicine or disease)
+      filter = {
+        type: typeFilter,
+      };
+    }
+
     // Query for more results to aggregate by parent
-    const childResults = await querySimilarDocuments(query, topK);
+    const childResults = await querySimilarDocuments(query, topK, filter);
 
     if (childResults.length === 0) {
       return [];
@@ -232,7 +257,7 @@ export async function searchVectorDatabase(
       if (!result.parentChunkId) {
         return;
       }
-      
+
       const existing = parentScores.get(result.parentChunkId);
       // Reciprocal rank contribution
       const rrfScore = 1 / (index + 60); // k=60 is common for RRF

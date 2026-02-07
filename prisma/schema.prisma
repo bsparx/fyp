@@ -27,6 +27,16 @@ enum DocumentType {
   PATIENT
 }
 
+enum RagSubtype {
+  MEDICINE
+  DISEASE
+}
+
+enum PatientDataType {
+  REPORT
+  COMMENT
+}
+
 model User {
   id          String   @id @default(cuid())
   clerkId     String   @unique
@@ -37,6 +47,7 @@ model User {
 
   role        Role     @default(PATIENT)
   documents   Document[]
+  medicalReports MedicalReport[]
 }
 
 model Document {
@@ -45,6 +56,8 @@ model Document {
   content         String       @db.Text
   pdfUrl          String?
   type            DocumentType @default(RAG)
+  ragSubtype      RagSubtype?
+  patientDataType PatientDataType?
   isIngested      Boolean      @default(false)
   
   // Optional relation to User (who this document belongs to)
@@ -57,6 +70,7 @@ model Document {
   // RAG document chunks stored in Pinecone
   ragChunks       RagChunk[]
   parentChunks    ParentChunk[]
+  medicalReports  MedicalReport[]
 }
 
 // Stores parent chunk text to avoid redundancy in Pinecone metadata
@@ -89,5 +103,43 @@ model RagChunk {
   pineconeId      String   @unique
   
   createdAt       DateTime @default(now())
+}
+
+// Model for storing medical report key-value pairs
+model MedicalReport {
+  id              String   @id @default(cuid())
+  documentId      String
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  // Report metadata
+  reportDate      DateTime?
+  hospitalName    String?
+  
+  // User relation
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Key-value pairs for the report
+  reportValues    MedicalReportValue[]
+}
+
+// Model for storing individual key-value pairs from medical reports
+model MedicalReportValue {
+  id              String   @id @default(cuid())
+  reportId        String
+  report          MedicalReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  // Key-value data (all uppercase for standardization)
+  key             String       // e.g., "VITAMIN D2"
+  value           String       // e.g., "1.15"
+  unit            String?      // e.g., "NG/ML"
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([reportId])
+  @@index([key])
 }
 

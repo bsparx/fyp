@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FileText, Trash2, CheckCircle, XCircle, Search, MoreHorizontal } from "lucide-react";
+import { FileText, Trash2, CheckCircle, XCircle, Search, MoreHorizontal, Pill, Activity } from "lucide-react";
 import {
     Card,
     CardContent,
@@ -37,7 +37,16 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { deleteDocument, type DocumentWithStats } from "./actions";
+
+type TypeFilter = "ALL" | "MEDICINE" | "DISEASE";
 
 interface BrowseDocumentsClientProps {
     documents: DocumentWithStats[];
@@ -46,17 +55,29 @@ interface BrowseDocumentsClientProps {
 export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDocumentsClientProps) {
     const [documents, setDocuments] = React.useState(initialDocuments);
     const [searchQuery, setSearchQuery] = React.useState("");
+    const [typeFilter, setTypeFilter] = React.useState<TypeFilter>("ALL");
     const [isDeleting, setIsDeleting] = React.useState<string | null>(null);
 
     const filteredDocuments = React.useMemo(() => {
-        if (!searchQuery.trim()) return documents;
-        const query = searchQuery.toLowerCase();
-        return documents.filter(
-            (doc) =>
-                doc.title.toLowerCase().includes(query) ||
-                doc.content.toLowerCase().includes(query)
-        );
-    }, [documents, searchQuery]);
+        let filtered = documents;
+
+        // Filter by type
+        if (typeFilter !== "ALL") {
+            filtered = filtered.filter((doc) => doc.ragSubtype === typeFilter);
+        }
+
+        // Filter by search query
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter(
+                (doc) =>
+                    doc.title.toLowerCase().includes(query) ||
+                    doc.content.toLowerCase().includes(query)
+            );
+        }
+
+        return filtered;
+    }, [documents, searchQuery, typeFilter]);
 
     const handleDelete = async (documentId: string) => {
         setIsDeleting(documentId);
@@ -90,18 +111,40 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                     <div>
                         <CardTitle>Documents</CardTitle>
                         <CardDescription>
-                            {documents.length} document{documents.length !== 1 ? "s" : ""} in the database
+                            {filteredDocuments.length} of {documents.length} document{documents.length !== 1 ? "s" : ""} in the database
                         </CardDescription>
                     </div>
-                    <div className="relative w-72">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            type="search"
-                            placeholder="Filter documents..."
-                            className="pl-8"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
+                    <div className="flex items-center gap-3">
+                        <Select value={typeFilter} onValueChange={(value: TypeFilter) => setTypeFilter(value)}>
+                            <SelectTrigger className="w-[140px]">
+                                <SelectValue placeholder="Filter by type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Types</SelectItem>
+                                <SelectItem value="MEDICINE">
+                                    <span className="flex items-center gap-2">
+                                        <Pill className="h-3.5 w-3.5" />
+                                        Medicine
+                                    </span>
+                                </SelectItem>
+                                <SelectItem value="DISEASE">
+                                    <span className="flex items-center gap-2">
+                                        <Activity className="h-3.5 w-3.5" />
+                                        Disease
+                                    </span>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <div className="relative w-72">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                type="search"
+                                placeholder="Filter documents..."
+                                className="pl-8"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
                     </div>
                 </div>
             </CardHeader>
@@ -121,6 +164,7 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[300px]">Title</TableHead>
+                                <TableHead>Type</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Parent Chunks</TableHead>
                                 <TableHead className="text-right">RAG Chunks</TableHead>
@@ -141,6 +185,23 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                                                 </div>
                                             </div>
                                         </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        {doc.ragSubtype === "MEDICINE" ? (
+                                            <Badge variant="outline" className="gap-1 text-blue-600 border-blue-300 bg-blue-50 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800">
+                                                <Pill className="h-3 w-3" />
+                                                Medicine
+                                            </Badge>
+                                        ) : doc.ragSubtype === "DISEASE" ? (
+                                            <Badge variant="outline" className="gap-1 text-purple-600 border-purple-300 bg-purple-50 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-800">
+                                                <Activity className="h-3 w-3" />
+                                                Disease
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="gap-1">
+                                                Unknown
+                                            </Badge>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         {doc.isIngested ? (

@@ -7,7 +7,11 @@ import {
   deleteDocumentVectors,
 } from "@/utils/embeddings";
 import { revalidatePath } from "next/cache";
-import type { DocumentType, Prisma } from "@/app/generated/prisma/client";
+import type {
+  DocumentType,
+  Prisma,
+  RagSubtype,
+} from "@/app/generated/prisma/client";
 
 export interface UploadDocumentResult {
   success: boolean;
@@ -24,10 +28,18 @@ export async function uploadDocument(
 ): Promise<UploadDocumentResult> {
   try {
     const title = formData.get("title") as string;
+    const ragSubtype = formData.get("ragSubtype") as RagSubtype;
     const pdfFilesJson = formData.get("pdfFiles") as string;
 
     if (!title) {
       return { success: false, message: "Document title is required." };
+    }
+
+    if (!ragSubtype) {
+      return {
+        success: false,
+        message: "Document type (Medicine/Disease) is required.",
+      };
     }
 
     if (!pdfFilesJson) {
@@ -55,12 +67,13 @@ export async function uploadDocument(
 
     console.log(`Extracted ${extractedText.length} characters of text.`);
 
-    // Create document record in database (always RAG type for this page)
+    // Create document record in database with the selected RAG subtype
     const document = await prisma.document.create({
       data: {
         title,
         content: extractedText,
         type: "RAG",
+        ragSubtype,
         isIngested: false,
       },
     });

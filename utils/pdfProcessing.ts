@@ -3,11 +3,17 @@
 import { PDFDocument } from "pdf-lib";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
+import { execSync } from "child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { v4 as uuidv4 } from "uuid";
 
 const openRouter = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   apiKey: process.env.OPENROUTER_API_KEY || "",
 });
+
+const ZAI_API_KEY = process.env.ZAI_API_KEY || "";
 
 /**
  * Retrieves and validates Gemini API keys from environment variables.
@@ -26,6 +32,48 @@ function getApiKeys(): string[] {
   }
 
   return apiKeys;
+}
+
+/**
+ * Converts a PDF (base64) to an array of base64-encoded PNG images.
+ * Uses mutool locally to perform the conversion.
+ */
+async function pdfToImages(pdfBase64: string): Promise<string[]> {
+  console.log("Starting PDF to image conversion locally");
+
+  // Create a unique temporary directory for this run
+  const runId = uuidv4();
+  const tmpDir = path.join("/tmp", runId);
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  const inputPdfPath = path.join(tmpDir, "input.pdf");
+  const outputPattern = path.join(tmpDir, "page-%d.png");
+
+  try {
+    const buffer = Buffer.from(pdfBase64, "base64");
+    fs.writeFileSync(inputPdfPath, buffer);
+
+    execSync(`mutool draw -o "${outputPattern}" -r 216 "${inputPdfPath}"`);
+
+    const files = fs.readdirSync(tmpDir).filter((f) => f.endsWith(".png"));
+    files.sort((a, b) => {
+      const numA = parseInt(a.match(/\d+/)?.[0] || "0");
+      const numB = parseInt(b.match(/\d+/)?.[0] || "0");
+      return numA - numB;
+    });
+
+    const images: string[] = [];
+    for (const file of files) {
+      const imageBuffer = fs.readFileSync(path.join(tmpDir, file));
+      images.push(`data:image/png;base64,${imageBuffer.toString("base64")}`);
+    }
+
+    console.log(`Converted PDF to ${images.length} images`);
+    return images;
+  } finally {
+    // Cleanup: remove temporary directory
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 }
 
 const initialExtractionPrompt = (startingPage: number) => `
@@ -110,16 +158,180 @@ BEGIN WORK AS SOON AS THE FIRST PAGE IMAGE IS SUPPLIED.  OUTPUT ONLY THE TRANSCR
 ===================================================================================================
 `;
 
+/**
+ * Calls the Z.AI Layout Parsing API (glm-ocr) to extract text from a PDF.
+ * Accepts a base64-encoded PDF directly — no image conversion needed.
+ * Returns markdown-formatted text or null on failure.
+ */
+async function pdfToTextWithZAI(
+  pdfBase64: string,
+  startingPage: number,
+  endPage?: number
+): Promise<string | null> {
+  if (!ZAI_API_KEY) {
+    console.warn("ZAI_API_KEY is not set, skipping Z.AI Layout Parsing.");
+    return null;
+  }
+
+  console.log(
+    `Attempting Z.AI Layout Parsing API call for pages starting at ${startingPage}`
+  );
+
+  try {
+    const requestBody: Record<string, unknown> = {
+      model: "glm-ocr",
+      file: `data:application/pdf;base64,${pdfBase64}`,
+    };
+
+    if (startingPage > 1) {
+      requestBody.start_page_id = startingPage;
+    }
+    if (endPage !== undefined) {
+      requestBody.end_page_id = endPage;
+    }
+
+    const response = await fetch(
+      "https://api.z.ai/api/paas/v4/layout_parsing",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ZAI_API_KEY}`,
+        },
+        body: JSON.stringify(requestBody),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `Z.AI API returned status ${response.status}: ${errorText}`
+      );
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.md_results) {
+      console.log(
+        `SUCCESS: Z.AI Layout Parsing succeeded. Result length: ${data.md_results.length}`
+      );
+      return data.md_results;
+    }
+
+    console.warn("Z.AI API returned no md_results.");
+    return null;
+  } catch (error) {
+    console.error("FAILURE: Z.AI Layout Parsing API call failed.");
+    if (error instanceof Error) {
+      console.error("Error Message:", error.message);
+    } else {
+      console.error("An unknown error occurred:", error);
+    }
+    return null;
+  }
+}
+
 export async function pdfToText(
   pdfBase64: string,
   startingPage: number
 ): Promise<string | null> {
   const prompt = initialExtractionPrompt(startingPage);
+
+  console.log(`Starting PDF extraction from page ${startingPage}.`);
+
+  // ── Primary: Z.AI Layout Parsing (glm-ocr) ──
+  // Accepts PDF directly, no image conversion needed
+  const zaiResult = await pdfToTextWithZAI(pdfBase64, startingPage);
+  if (zaiResult) {
+    return zaiResult;
+  }
+  console.log(
+    "Z.AI Layout Parsing failed or unavailable, falling back to Qwen-VL + Gemini..."
+  );
+
+  // ── Fallback 1: OpenRouter Qwen-VL (requires image conversion) ──
+  // Convert PDF to images locally
+  let images: string[];
+  try {
+    images = await pdfToImages(pdfBase64);
+    if (images.length === 0) {
+      console.error("No images extracted from PDF");
+      return null;
+    }
+    console.log(`Extracted ${images.length} images from PDF`);
+  } catch (error) {
+    console.error("Error converting PDF to images:", error);
+    return null;
+  }
+
+  // Use OpenRouter Qwen-VL to transcribe images
+  console.log("Attempting OpenRouter Qwen-VL API call for image transcription");
+
+  try {
+    // Build the content array with prompt text and all images
+    const contentParts: Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    > = [
+      {
+        type: "text",
+        text: prompt,
+      },
+      ...images.map((imageDataUri) => ({
+        type: "image_url" as const,
+        image_url: {
+          url: imageDataUri,
+        },
+      })),
+    ];
+
+    const result = await openRouter.chat.completions.create({
+      model: "qwen/qwen3-vl-8b-instruct",
+      messages: [
+        {
+          role: "user",
+          content: contentParts,
+        },
+      ],
+      max_tokens: 16000,
+    });
+
+    const text = result.choices[0]?.message?.content;
+
+    console.log(
+      `SUCCESS: OpenRouter Qwen-VL API call succeeded for page ${startingPage}.`
+    );
+    console.log("Response Text Length:", text?.length ?? 0);
+
+    if (text === undefined || text === null) {
+      console.warn(
+        "Response text was undefined or null, returning empty content."
+      );
+      return "";
+    }
+
+    return text;
+  } catch (error) {
+    console.error("FAILURE: OpenRouter Qwen-VL API call failed.");
+    if (error instanceof Error) {
+      console.error("Error Message:", error.message);
+      if (
+        error.message.includes("429") ||
+        error.message.includes("RESOURCE_EXHAUSTED")
+      ) {
+        console.error("Reason: Rate limit likely exceeded.");
+      }
+    } else {
+      console.error("An unknown error occurred:", error);
+    }
+  }
+
+  // ── Fallback 2: Gemini with native PDF support ──
+  console.log("OpenRouter failed, trying Gemini fallback with native PDF...");
   const apiKeys = getApiKeys();
   const totalKeys = apiKeys.length;
   const startIndex = Math.floor(Math.random() * totalKeys);
-
-  console.log(`Starting PDF extraction. Total keys: ${totalKeys}.`);
 
   const fileDataPart = {
     inlineData: {
@@ -128,7 +340,6 @@ export async function pdfToText(
     },
   };
 
-  // Try Gemini first
   for (let i = 0; i < totalKeys; i++) {
     const currentIndex = (startIndex + i) % totalKeys;
     const apiKey = apiKeys[currentIndex];
@@ -168,37 +379,6 @@ export async function pdfToText(
         console.error("Error Message:", error.message);
       }
     }
-  }
-
-  // Fallback to OpenRouter
-  console.log("Gemini failed, trying OpenRouter fallback...");
-  try {
-    const result = await openRouter.chat.completions.create({
-      model: "google/gemini-2.0-flash-001",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:application/pdf;base64,${pdfBase64}`,
-              },
-            },
-          ],
-        },
-      ],
-      max_tokens: 8000,
-    });
-
-    const text = result.choices[0]?.message?.content;
-    if (text) {
-      console.log("SUCCESS: OpenRouter fallback succeeded.");
-      return text;
-    }
-  } catch (error) {
-    console.error("OpenRouter fallback also failed:", error);
   }
 
   console.error("All API attempts failed. Unable to process the PDF.");

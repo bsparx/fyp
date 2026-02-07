@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, FileText, Sparkles, Clock, ChevronRight } from "lucide-react";
+import { Search, FileText, Sparkles, Clock, ChevronRight, Pill, Activity } from "lucide-react";
 import {
     Card,
     CardContent,
@@ -23,10 +23,20 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { searchVectorDatabase, type ParentSearchResult } from "../actions";
+
+type SearchTypeFilter = "all" | "medicine" | "disease";
 
 export function SearchClient() {
     const [query, setQuery] = React.useState("");
+    const [typeFilter, setTypeFilter] = React.useState<SearchTypeFilter>("all");
     const [results, setResults] = React.useState<ParentSearchResult[]>([]);
     const [isSearching, setIsSearching] = React.useState(false);
     const [searchTime, setSearchTime] = React.useState<number | null>(null);
@@ -41,7 +51,7 @@ export function SearchClient() {
         const startTime = performance.now();
 
         try {
-            const searchResults = await searchVectorDatabase(query, 50);
+            const searchResults = await searchVectorDatabase(query, 50, typeFilter);
             setResults(searchResults);
             setSearchTime(performance.now() - startTime);
         } catch (error) {
@@ -87,28 +97,72 @@ export function SearchClient() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSearch} className="flex gap-2">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    type="search"
-                                    placeholder="Enter your search query..."
-                                    className="pl-9"
-                                    value={query}
-                                    onChange={(e) => setQuery(e.target.value)}
-                                    disabled={isSearching}
-                                />
+                        <form onSubmit={handleSearch} className="flex flex-col gap-3">
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                        type="search"
+                                        placeholder="Enter your search query..."
+                                        className="pl-9"
+                                        value={query}
+                                        onChange={(e) => setQuery(e.target.value)}
+                                        disabled={isSearching}
+                                    />
+                                </div>
+                                <Button type="submit" disabled={isSearching || !query.trim()}>
+                                    {isSearching ? (
+                                        <>
+                                            <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                            Searching...
+                                        </>
+                                    ) : (
+                                        "Search"
+                                    )}
+                                </Button>
                             </div>
-                            <Button type="submit" disabled={isSearching || !query.trim()}>
-                                {isSearching ? (
-                                    <>
-                                        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                        Searching...
-                                    </>
-                                ) : (
-                                    "Search"
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-muted-foreground">Search in:</span>
+                                <Select value={typeFilter} onValueChange={(value: SearchTypeFilter) => setTypeFilter(value)}>
+                                    <SelectTrigger className="w-[180px]">
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">
+                                            <span className="flex items-center gap-2">
+                                                All Documents
+                                            </span>
+                                        </SelectItem>
+                                        <SelectItem value="medicine">
+                                            <span className="flex items-center gap-2">
+                                                <Pill className="h-3.5 w-3.5 text-blue-500" />
+                                                Medicine Only
+                                            </span>
+                                        </SelectItem>
+                                        <SelectItem value="disease">
+                                            <span className="flex items-center gap-2">
+                                                <Activity className="h-3.5 w-3.5 text-purple-500" />
+                                                Disease Only
+                                            </span>
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {typeFilter !== "all" && (
+                                    <Badge variant="outline" className="gap-1">
+                                        {typeFilter === "medicine" ? (
+                                            <>
+                                                <Pill className="h-3 w-3 text-blue-500" />
+                                                Medicine
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Activity className="h-3 w-3 text-purple-500" />
+                                                Disease
+                                            </>
+                                        )}
+                                    </Badge>
                                 )}
-                            </Button>
+                            </div>
                         </form>
                     </CardContent>
                 </Card>

@@ -50,6 +50,10 @@ const data = {
           url: "/dashboard/users/new",
         },
         {
+          title: "User Data",
+          url: "/dashboard/users/data",
+        },
+        {
           title: "Roles & Permissions",
           url: "/dashboard/users/roles",
         },

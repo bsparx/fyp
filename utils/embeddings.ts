@@ -45,10 +45,10 @@ export async function embedAndStoreDocument(
   documentTitle: string
 ): Promise<boolean> {
   try {
-    // Check if document is already ingested
+    // Check if document is already ingested and get ragSubtype
     const document = await prisma.document.findUnique({
       where: { id: documentId },
-      select: { isIngested: true },
+      select: { isIngested: true, ragSubtype: true },
     });
 
     if (document?.isIngested) {
@@ -123,6 +123,7 @@ export async function embedAndStoreDocument(
                 childText: childChunks[childIdx],
                 parentIndex,
                 childIndex: childIdx,
+                type: document?.ragSubtype?.toLowerCase() ?? "medicine", // "medicine" or "disease"
               },
             };
           }
@@ -172,6 +173,153 @@ export async function embedAndStoreDocument(
     return true;
   } catch (error) {
     console.error("Error embedding and storing document:", error);
+    return false;
+  }
+}
+
+/**
+ * Embeds patient document content and stores it in Pinecone with patient metadata.
+ * Parent text is stored in the database (ParentChunk table) to avoid redundancy.
+ * Only the parentChunkId is stored in Pinecone metadata.
+ * Metadata includes patient: true and patientId for filtering.
+ */
+export async function embedAndStorePatientDocument(
+  documentId: string,
+  content: string,
+  documentTitle: string,
+  patientId: string
+): Promise<boolean> {
+  try {
+    // Check if document is already ingested
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: { isIngested: true },
+    });
+
+    if (document?.isIngested) {
+      console.log("Document already ingested, skipping embedding process.");
+      return true;
+    }
+
+    // Split content into parent chunks using header-based splitter
+    const parentChunks = textSplitterForRag(content);
+
+    if (parentChunks.length === 0) {
+      console.log("No chunks to process.");
+      return true;
+    }
+
+    console.log(
+      `Processing ${parentChunks.length} parent chunks for patient document: ${documentTitle}`
+    );
+
+    // Delete any existing chunks for this document
+    await prisma.ragChunk.deleteMany({
+      where: { documentId },
+    });
+    await prisma.parentChunk.deleteMany({
+      where: { documentId },
+    });
+
+    // Process each parent chunk
+    const processSingleParent = async (
+      parentContent: string,
+      parentIndex: number
+    ) => {
+      console.log(`Processing parent chunk index: ${parentIndex}`);
+
+      try {
+        // Create parent chunk in database first
+        const parentChunk = await prisma.parentChunk.create({
+          data: {
+            documentId,
+            parentIndex,
+            parentText: parentContent,
+          },
+        });
+
+        // Split parent into child chunks for embedding
+        const childChunks = await childSplitter.splitText(parentContent);
+
+        if (childChunks.length === 0) {
+          console.log(`No child chunks for parent index ${parentIndex}`);
+          return;
+        }
+
+        // Generate contextualized embeddings
+        const voyageEmbeddings = await voyageClient.embed({
+          input: childChunks,
+          model: "voyage-3-large",
+          inputType: "document",
+          outputDimension: 2048,
+        });
+
+        // Prepare vectors for Pinecone - store parentChunkId instead of parentText
+        const vectors = voyageEmbeddings.data?.map(
+          (embeddingResult, childIdx) => {
+            const pineconeId = `${documentId}_parent${parentIndex}_child${childIdx}`;
+            return {
+              id: pineconeId,
+              values: embeddingResult.embedding as number[],
+              metadata: {
+                documentId,
+                documentTitle,
+                parentChunkId: parentChunk.id, // Reference to parent chunk in DB
+                childText: childChunks[childIdx],
+                parentIndex,
+                childIndex: childIdx,
+                patient: true,
+                patientId,
+                type: "patient", // "patient" for patient documents
+              },
+            };
+          }
+        );
+
+        if (vectors && vectors.length > 0) {
+          // Upsert to Pinecone
+          await index.upsert(vectors);
+          console.log(
+            `Upserted ${vectors.length} vectors for parent index ${parentIndex}`
+          );
+
+          // Store chunk references in database
+          await prisma.ragChunk.createMany({
+            data: vectors.map((v, idx) => ({
+              documentId,
+              parentChunkId: parentChunk.id,
+              chunkIndex: parentIndex * 1000 + idx, // Composite index
+              chunkText: childChunks[idx],
+              pineconeId: v.id,
+            })),
+          });
+        }
+      } catch (e) {
+        console.error(`Error processing parent index ${parentIndex}:`, e);
+      }
+    };
+
+    // Process first chunk sequentially to warm up
+    await processSingleParent(parentChunks[0], 0);
+
+    // Process remaining chunks in parallel
+    if (parentChunks.length > 1) {
+      const remainingPromises = parentChunks
+        .slice(1)
+        .map((chunk, idx) => processSingleParent(chunk, idx + 1));
+      await Promise.all(remainingPromises);
+    }
+
+    // Mark document as ingested
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { isIngested: true },
+    });
+
+    console.log(`Successfully ingested patient document: ${documentTitle}`);
+    return true;
+  } catch (error) {
+    console.error("Error embedding and storing patient document:", error);
     return false;
   }
 }
@@ -240,12 +388,14 @@ export async function getParentTexts(
 ): Promise<Map<string, string>> {
   try {
     // Filter out undefined/null values
-    const validIds = parentChunkIds.filter((id): id is string => id != null && id !== undefined);
-    
+    const validIds = parentChunkIds.filter(
+      (id): id is string => id != null && id !== undefined
+    );
+
     if (validIds.length === 0) {
       return new Map();
     }
-    
+
     const parentChunks = await prisma.parentChunk.findMany({
       where: { id: { in: validIds } },
       select: { id: true, parentText: true },

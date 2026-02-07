@@ -18,6 +18,8 @@ import {
     Loader2,
     UploadCloud,
     GripVertical,
+    Pill,
+    Activity,
 } from "lucide-react"
 import {
     DndContext,
@@ -116,6 +118,7 @@ export default function UploadPage() {
     const [isProcessing, setIsProcessing] = useState(false)
     const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null)
     const [documentTitle, setDocumentTitle] = useState("")
+    const [documentType, setDocumentType] = useState<"MEDICINE" | "DISEASE">("MEDICINE")
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const sensors = useSensors(
@@ -243,6 +246,7 @@ export default function UploadPage() {
             try {
                 const formData = new FormData()
                 formData.set("title", documentTitle.trim())
+                formData.set("ragSubtype", documentType)
 
                 // Send base64 data as JSON array (in order)
                 const pdfBase64Array = pdfFiles.map(f => f.base64!)
@@ -300,6 +304,51 @@ export default function UploadPage() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Document Type Selection */}
+                    <div className="space-y-3">
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                            Document Type
+                        </label>
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                type="button"
+                                onClick={() => setDocumentType("MEDICINE")}
+                                disabled={isLoading}
+                                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all duration-200 ${documentType === "MEDICINE"
+                                    ? "border-blue-500 bg-blue-50 dark:bg-blue-500/20"
+                                    : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-500"
+                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                                <Pill className={`h-6 w-6 ${documentType === "MEDICINE"
+                                    ? "text-blue-600 dark:text-blue-400"
+                                    : "text-slate-500 dark:text-slate-400"
+                                    }`} />
+                                <span className={`font-medium ${documentType === "MEDICINE"
+                                    ? "text-blue-700 dark:text-blue-300"
+                                    : "text-slate-600 dark:text-slate-400"
+                                    }`}>Medicine</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDocumentType("DISEASE")}
+                                disabled={isLoading}
+                                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all duration-200 ${documentType === "DISEASE"
+                                    ? "border-blue-500 bg-blue-50 dark:bg-blue-500/20"
+                                    : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-500"
+                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                                <Activity className={`h-6 w-6 ${documentType === "DISEASE"
+                                    ? "text-blue-600 dark:text-blue-400"
+                                    : "text-slate-500 dark:text-slate-400"
+                                    }`} />
+                                <span className={`font-medium ${documentType === "DISEASE"
+                                    ? "text-blue-700 dark:text-blue-300"
+                                    : "text-slate-600 dark:text-slate-400"
+                                    }`}>Disease</span>
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Document Title */}
                     <div className="space-y-2">
                         <label
