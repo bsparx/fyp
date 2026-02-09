@@ -49,6 +49,7 @@ export async function extractReportDataWithAI(
   try {
     const response = await openRouter.chat.completions.create({
       model: "qwen/qwen3-vl-8b-instruct",
+      reasoning_effort: "none",
       messages: [
         {
           role: "system",
@@ -59,6 +60,7 @@ export async function extractReportDataWithAI(
           content: ocrText,
         },
       ],
+      max_completion_tokens: 2000,
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -105,7 +107,7 @@ export async function extractReportDataWithAI(
           },
         },
       },
-      temperature: 0,
+      temperature: 0.1,
     });
 
     const content = response.choices[0]?.message?.content;
