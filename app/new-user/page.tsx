@@ -25,5 +25,5 @@ export default async function connect() {
     });
 
 
-    redirect("/register");
+    redirect("/dashboard");
 }
