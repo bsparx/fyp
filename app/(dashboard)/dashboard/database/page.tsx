@@ -1,6 +1,8 @@
 import { getDocuments } from "./actions";
 import { BrowseDocumentsClient } from "./browse-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function DatabaseBrowsePage() {
     const documents = await getDocuments();
 
