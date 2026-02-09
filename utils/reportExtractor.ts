@@ -105,7 +105,7 @@ export async function extractReportDataWithAI(
           },
         },
       },
-      temperature: 0.1,
+      temperature: 0,
     });
 
     const content = response.choices[0]?.message?.content;
