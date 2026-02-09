@@ -2,16 +2,6 @@
 
 import { PDFDocument } from "pdf-lib";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import OpenAI from "openai";
-import { execSync } from "child_process";
-import fs from "node:fs";
-import path from "node:path";
-import { v4 as uuidv4 } from "uuid";
-
-const openRouter = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY || "",
-});
 
 const ZAI_API_KEY = process.env.ZAI_API_KEY || "";
 
@@ -32,48 +22,6 @@ function getApiKeys(): string[] {
   }
 
   return apiKeys;
-}
-
-/**
- * Converts a PDF (base64) to an array of base64-encoded PNG images.
- * Uses mutool locally to perform the conversion.
- */
-async function pdfToImages(pdfBase64: string): Promise<string[]> {
-  console.log("Starting PDF to image conversion locally");
-
-  // Create a unique temporary directory for this run
-  const runId = uuidv4();
-  const tmpDir = path.join("/tmp", runId);
-  fs.mkdirSync(tmpDir, { recursive: true });
-
-  const inputPdfPath = path.join(tmpDir, "input.pdf");
-  const outputPattern = path.join(tmpDir, "page-%d.png");
-
-  try {
-    const buffer = Buffer.from(pdfBase64, "base64");
-    fs.writeFileSync(inputPdfPath, buffer);
-
-    execSync(`mutool draw -o "${outputPattern}" -r 216 "${inputPdfPath}"`);
-
-    const files = fs.readdirSync(tmpDir).filter((f) => f.endsWith(".png"));
-    files.sort((a, b) => {
-      const numA = parseInt(a.match(/\d+/)?.[0] || "0");
-      const numB = parseInt(b.match(/\d+/)?.[0] || "0");
-      return numA - numB;
-    });
-
-    const images: string[] = [];
-    for (const file of files) {
-      const imageBuffer = fs.readFileSync(path.join(tmpDir, file));
-      images.push(`data:image/png;base64,${imageBuffer.toString("base64")}`);
-    }
-
-    console.log(`Converted PDF to ${images.length} images`);
-    return images;
-  } finally {
-    // Cleanup: remove temporary directory
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
 }
 
 const initialExtractionPrompt = (startingPage: number) => `
@@ -247,88 +195,11 @@ export async function pdfToText(
     return zaiResult;
   }
   console.log(
-    "Z.AI Layout Parsing failed or unavailable, falling back to Qwen-VL + Gemini..."
+    "Z.AI Layout Parsing failed or unavailable, falling back to Gemini..."
   );
 
-  // ── Fallback 1: OpenRouter Qwen-VL (requires image conversion) ──
-  // Convert PDF to images locally
-  let images: string[];
-  try {
-    images = await pdfToImages(pdfBase64);
-    if (images.length === 0) {
-      console.error("No images extracted from PDF");
-      return null;
-    }
-    console.log(`Extracted ${images.length} images from PDF`);
-  } catch (error) {
-    console.error("Error converting PDF to images:", error);
-    return null;
-  }
-
-  // Use OpenRouter Qwen-VL to transcribe images
-  console.log("Attempting OpenRouter Qwen-VL API call for image transcription");
-
-  try {
-    // Build the content array with prompt text and all images
-    const contentParts: Array<
-      | { type: "text"; text: string }
-      | { type: "image_url"; image_url: { url: string } }
-    > = [
-      {
-        type: "text",
-        text: prompt,
-      },
-      ...images.map((imageDataUri) => ({
-        type: "image_url" as const,
-        image_url: {
-          url: imageDataUri,
-        },
-      })),
-    ];
-
-    const result = await openRouter.chat.completions.create({
-      model: "qwen/qwen3-vl-8b-instruct",
-      messages: [
-        {
-          role: "user",
-          content: contentParts,
-        },
-      ],
-      max_tokens: 16000,
-    });
-
-    const text = result.choices[0]?.message?.content;
-
-    console.log(
-      `SUCCESS: OpenRouter Qwen-VL API call succeeded for page ${startingPage}.`
-    );
-    console.log("Response Text Length:", text?.length ?? 0);
-
-    if (text === undefined || text === null) {
-      console.warn(
-        "Response text was undefined or null, returning empty content."
-      );
-      return "";
-    }
-
-    return text;
-  } catch (error) {
-    console.error("FAILURE: OpenRouter Qwen-VL API call failed.");
-    if (error instanceof Error) {
-      console.error("Error Message:", error.message);
-      if (
-        error.message.includes("429") ||
-        error.message.includes("RESOURCE_EXHAUSTED")
-      ) {
-        console.error("Reason: Rate limit likely exceeded.");
-      }
-    } else {
-      console.error("An unknown error occurred:", error);
-    }
-  }
-
-  // ── Fallback 2: Gemini with native PDF support ──
-  console.log("OpenRouter failed, trying Gemini fallback with native PDF...");
+  // ── Fallback: Gemini with native PDF support ──
+  console.log("Trying Gemini fallback with native PDF...");
   const apiKeys = getApiKeys();
   const totalKeys = apiKeys.length;
   const startIndex = Math.floor(Math.random() * totalKeys);
@@ -418,28 +289,30 @@ export async function processPdfAndConvertToText(
 
     console.log(`Total merged PDF has ${pageCount} pages`);
 
-    // If small PDF, process directly
-    let chunkSize = Math.ceil(pageCount / 10);
-    if (chunkSize < 3) chunkSize = 3;
+    const MAX_PAGES_PER_CHUNK = 99;
 
-    if (pageCount <= chunkSize) {
-      console.log("PDF is small, converting directly without splitting.");
+    // If PDF is within the limit, send it directly without splitting
+    if (pageCount <= MAX_PAGES_PER_CHUNK) {
+      console.log("PDF is within 99-page limit, sending directly to glm-ocr.");
       return await pdfToText(mergedBase64, 1);
     }
 
-    // Process in chunks for large PDFs
+    // Split into chunks of up to 99 pages for large PDFs
+    console.log(
+      `PDF exceeds ${MAX_PAGES_PER_CHUNK} pages, splitting into chunks...`
+    );
     const textExtractionPromises: Promise<{
       index: number;
       text: string | null;
     }>[] = [];
 
-    for (let i = 0; i < pageCount; i += chunkSize) {
-      const chunkIndex = i / chunkSize;
+    for (let i = 0; i < pageCount; i += MAX_PAGES_PER_CHUNK) {
+      const chunkIndex = i / MAX_PAGES_PER_CHUNK;
 
       const task = (async () => {
         const newPdfDoc = await PDFDocument.create();
         const startPage = i;
-        const endPage = Math.min(i + chunkSize, pageCount);
+        const endPage = Math.min(i + MAX_PAGES_PER_CHUNK, pageCount);
         const pageIndices = Array.from(
           { length: endPage - startPage },
           (_, k) => startPage + k

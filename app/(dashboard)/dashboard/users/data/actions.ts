@@ -183,6 +183,7 @@ export async function uploadUserDocument(
                 key: tv.key,
                 value: tv.value,
                 unit: tv.unit,
+                userId: verifiedUserId,
               })),
             },
           },

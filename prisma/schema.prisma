@@ -48,6 +48,7 @@ model User {
   role        Role     @default(PATIENT)
   documents   Document[]
   medicalReports MedicalReport[]
+  medicalReportValues MedicalReportValue[]
 }
 
 model Document {
@@ -132,6 +133,10 @@ model MedicalReportValue {
   reportId        String
   report          MedicalReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
   
+  // User relation
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
   // Key-value data (all uppercase for standardization)
   key             String       // e.g., "VITAMIN D2"
   value           String       // e.g., "1.15"
@@ -141,5 +146,6 @@ model MedicalReportValue {
   
   @@index([reportId])
   @@index([key])
+  @@index([userId])
 }
 

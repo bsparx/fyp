@@ -59,7 +59,7 @@ export interface ParentSearchResult {
 export async function getDocuments(): Promise<DocumentWithStats[]> {
   const documents = await prisma.document.findMany({
     where: {
-      type: "RAG", // Only show RAG documents, exclude PATIENT documents
+      type: "RAG",
     },
     include: {
       _count: {
