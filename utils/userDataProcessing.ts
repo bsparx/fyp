@@ -9,6 +9,8 @@ const openRouter = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY || "",
 });
 
+const ZAI_API_KEY = process.env.ZAI_API_KEY || "";
+
 /**
  * Retrieves and validates Gemini API keys from environment variables.
  */
@@ -70,18 +72,92 @@ BEGIN WORK AS SOON AS THE IMAGE IS SUPPLIED. OUTPUT ONLY THE EXTRACTED GFM.
 `;
 
 /**
- * Extract text from an image using Gemini's vision capabilities.
+ * Calls the Z.AI Layout Parsing API (glm-ocr) to extract text from an image.
+ * Accepts a base64-encoded image directly.
+ * Returns markdown-formatted text or null on failure.
+ */
+async function imageToTextWithZAI(
+  imageBase64: string,
+  mimeType: string
+): Promise<string | null> {
+  if (!ZAI_API_KEY) {
+    console.warn("ZAI_API_KEY is not set, skipping Z.AI Layout Parsing.");
+    return null;
+  }
+
+  console.log("Attempting Z.AI Layout Parsing API call for image...");
+
+  try {
+    const requestBody = {
+      model: "glm-ocr",
+      file: `data:${mimeType};base64,${imageBase64}`,
+    };
+
+    const response = await fetch(
+      "https://api.z.ai/api/paas/v4/layout_parsing",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ZAI_API_KEY}`,
+        },
+        body: JSON.stringify(requestBody),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `Z.AI API returned status ${response.status}: ${errorText}`
+      );
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.md_results) {
+      console.log(
+        `SUCCESS: Z.AI Layout Parsing succeeded for image. Result length: ${data.md_results.length}`
+      );
+      return data.md_results;
+    }
+
+    console.warn("Z.AI API returned no md_results for image.");
+    return null;
+  } catch (error) {
+    console.error("FAILURE: Z.AI Layout Parsing API call failed for image.");
+    if (error instanceof Error) {
+      console.error("Error Message:", error.message);
+    }
+    return null;
+  }
+}
+
+/**
+ * Extract text from an image.
+ * Primary: Z.AI Layout Parsing (glm-ocr) with base64 image input.
+ * Fallback: Gemini vision, then OpenRouter.
  */
 export async function imageToText(
   imageBase64: string,
   mimeType: string
 ): Promise<string | null> {
+  // ── Primary: Z.AI Layout Parsing (glm-ocr) ──
+  const zaiResult = await imageToTextWithZAI(imageBase64, mimeType);
+  if (zaiResult) {
+    return zaiResult;
+  }
+  console.log(
+    "Z.AI Layout Parsing failed or unavailable for image, falling back to Gemini..."
+  );
+
+  // ── Fallback: Gemini Vision ──
   const prompt = imageExtractionPrompt;
   const apiKeys = getApiKeys();
   const totalKeys = apiKeys.length;
   const startIndex = Math.floor(Math.random() * totalKeys);
 
-  console.log(`Starting image extraction. Total keys: ${totalKeys}.`);
+  console.log(`Starting Gemini image extraction. Total keys: ${totalKeys}.`);
 
   const fileDataPart = {
     inlineData: {
@@ -90,7 +166,6 @@ export async function imageToText(
     },
   };
 
-  // Try Gemini first
   for (let i = 0; i < totalKeys; i++) {
     const currentIndex = (startIndex + i) % totalKeys;
     const apiKey = apiKeys[currentIndex];
@@ -130,7 +205,7 @@ export async function imageToText(
     }
   }
 
-  // Fallback to OpenRouter
+  // ── Last Resort: OpenRouter ──
   console.log("Gemini failed, trying OpenRouter fallback...");
   try {
     const result = await openRouter.chat.completions.create({

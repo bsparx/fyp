@@ -507,3 +507,55 @@ export async function querySimilarDocumentsWithParentText(
     score: result.score,
   }));
 }
+
+/**
+ * Rerank documents using VoyageAI's reranker model.
+ * Returns reranked results filtered by a relevance threshold.
+ */
+export async function rerankDocuments(
+  query: string,
+  documents: string[],
+  topK?: number
+): Promise<
+  Array<{
+    document: string;
+    relevanceScore: number;
+    index: number;
+  }>
+> {
+  try {
+    if (documents.length === 0) {
+      return [];
+    }
+
+    console.log(`Reranking ${documents.length} documents with Voyage...`);
+    const rerankedResult = await voyageClient.rerank({
+      query,
+      documents,
+      model: "rerank-2.5",
+      topK: topK ?? documents.length,
+      returnDocuments: true,
+    });
+
+    if (
+      !rerankedResult ||
+      !rerankedResult.data ||
+      rerankedResult.data.length === 0
+    ) {
+      console.log("Voyage rerank returned no results.");
+      return [];
+    }
+
+    console.log(`Reranked ${rerankedResult.data.length} documents.`);
+
+    // Return all reranked documents in order (already sorted by relevance)
+    return rerankedResult.data.map((doc) => ({
+      document: doc.document ?? "",
+      relevanceScore: doc.relevanceScore ?? 0,
+      index: doc.index ?? 0,
+    }));
+  } catch (error) {
+    console.error("Error reranking documents:", error);
+    return [];
+  }
+}

@@ -219,9 +219,6 @@ export function SearchClient() {
                                                                     </span>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
-                                                                    <Badge variant="secondary">
-                                                                        {result.childMatches} match{result.childMatches !== 1 ? "es" : ""}
-                                                                    </Badge>
                                                                     <div className="flex items-center gap-2">
                                                                         <Progress
                                                                             value={result.score * 100}
@@ -258,10 +255,6 @@ export function SearchClient() {
                                                             {result.documentTitle}
                                                         </DialogTitle>
                                                         <DialogDescription className="flex items-center gap-2">
-                                                            <Badge variant="secondary">
-                                                                {result.childMatches} match{result.childMatches !== 1 ? "es" : ""}
-                                                            </Badge>
-                                                            <span>•</span>
                                                             <span>Score: {formatScore(result.score)}</span>
                                                         </DialogDescription>
                                                     </DialogHeader>
@@ -342,8 +335,8 @@ export function SearchClient() {
                         <ul className="list-inside list-disc space-y-2">
                             <li>Use natural language questions</li>
                             <li>Be specific about what you&apos;re looking for</li>
-                            <li>Check the &quot;matches&quot; badge to see how many child chunks matched</li>
-                            <li>Higher match count often indicates better coverage</li>
+                            <li>Results are reranked by relevance to your query</li>
+                            <li>Higher scores indicate better relevance</li>
                         </ul>
                     </CardContent>
                 </Card>

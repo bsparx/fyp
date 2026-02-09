@@ -5,6 +5,7 @@ import {
   deleteDocumentVectors,
   querySimilarDocuments,
   getParentTexts,
+  rerankDocuments,
 } from "@/utils/embeddings";
 import { revalidatePath } from "next/cache";
 
@@ -50,7 +51,6 @@ export interface ParentSearchResult {
   documentId: string;
   documentTitle: string;
   score: number;
-  childMatches: number;
 }
 
 /**
@@ -246,7 +246,6 @@ export async function searchVectorDatabase(
       {
         totalScore: number;
         maxScore: number;
-        childMatches: number;
         documentId: string;
         documentTitle: string;
       }
@@ -265,12 +264,10 @@ export async function searchVectorDatabase(
       if (existing) {
         existing.totalScore += rrfScore;
         existing.maxScore = Math.max(existing.maxScore, result.score);
-        existing.childMatches += 1;
       } else {
         parentScores.set(result.parentChunkId, {
           totalScore: rrfScore,
           maxScore: result.score,
-          childMatches: 1,
           documentId: result.documentId,
           documentTitle: result.documentTitle,
         });
@@ -291,17 +288,49 @@ export async function searchVectorDatabase(
     const parentChunkIds = sortedParents.map(([id]) => id);
     const parentTexts = await getParentTexts(parentChunkIds);
 
-    // Build final results
-    const results: ParentSearchResult[] = sortedParents.map(
-      ([parentChunkId, data]) => ({
-        parentChunkId,
-        parentText: parentTexts.get(parentChunkId) || "",
-        documentId: data.documentId,
-        documentTitle: data.documentTitle,
-        score: data.maxScore,
-        childMatches: data.childMatches,
-      })
-    );
+    // Build intermediate results with parent text
+    const intermediateResults = sortedParents.map(([parentChunkId, data]) => ({
+      parentChunkId,
+      parentText: parentTexts.get(parentChunkId) || "",
+      documentId: data.documentId,
+      documentTitle: data.documentTitle,
+      score: data.maxScore,
+    }));
+
+    // Filter to only unique parent texts
+    const seenTexts = new Set<string>();
+    const uniqueResults = intermediateResults.filter((result) => {
+      if (!result.parentText || seenTexts.has(result.parentText)) {
+        return false;
+      }
+      seenTexts.add(result.parentText);
+      return true;
+    });
+
+    if (uniqueResults.length === 0) {
+      return [];
+    }
+
+    // Rerank unique parent texts using VoyageAI
+    const documentsToRerank = uniqueResults.map((r) => r.parentText);
+    const rerankedDocs = await rerankDocuments(query, documentsToRerank);
+
+    if (rerankedDocs.length === 0) {
+      // If reranking failed, return original results
+      return uniqueResults;
+    }
+
+    // Map reranked results back to ParentSearchResult format, preserving rerank order
+    const results: ParentSearchResult[] = rerankedDocs.map((reranked) => {
+      const original = uniqueResults[reranked.index];
+      return {
+        parentChunkId: original.parentChunkId,
+        parentText: original.parentText,
+        documentId: original.documentId,
+        documentTitle: original.documentTitle,
+        score: reranked.relevanceScore,
+      };
+    });
 
     return results;
   } catch (error) {
