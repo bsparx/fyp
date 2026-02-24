@@ -4,46 +4,23 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import { processPdfAndConvertToText } from "./pdfProcessing";
 
-const openRouter = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY || "",
-});
-
 const ZAI_API_KEY = process.env.ZAI_API_KEY || "";
-
-/**
- * Retrieves and validates Gemini API keys from environment variables.
- */
-function getApiKeys(): string[] {
-  const apiKeys = [
-    process.env.GEMINI_API_KEY,
-    process.env.GEMINI_API_KEY2,
-    process.env.KeyForRoadmap_API_KEY,
-    process.env.GEMINI_API_KEY3,
-  ].filter((key): key is string => !!key);
-
-  if (apiKeys.length === 0) {
-    console.error("No GEMINI_API_KEY environment variables are set.");
-    throw new Error("Server configuration error: Missing Gemini API Keys.");
-  }
-
-  return apiKeys;
-}
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 
 const imageExtractionPrompt = `
 ===================================================================================================
 ROLE • You are a medical document scribe. Your mission is to extract all text and medical
-       information from the provided image with high accuracy.
+        information from provided image with high accuracy.
 
 PRIMARY GOALS
-1. Extract all visible text from the image.
-2. Preserve the structure and hierarchy of the information.
+1. Extract all visible text from image.
+2. Preserve structure and hierarchy of information.
 3. Identify and categorize medical information (patient details, diagnoses, medications, etc.).
 
 DELIVERABLE
-• One GitHub-Flavoured Markdown (GFM) file with the extracted text.
+• One GitHub-Flavoured Markdown (GFM) file with extracted text.
 • Use appropriate Markdown formatting (headings, lists, tables) to preserve structure.
-• No extra commentary, only the extracted content.
+• No extra commentary, only extracted content.
 
 ===================================================================================================
 GLOBAL RULES (obligatory)
@@ -52,7 +29,7 @@ GLOBAL RULES (obligatory)
 2. HANDWRITING — If fully legible, transcribe and prefix "[Handwritten: …]".
    Partially legible → "[…illegible…]". Completely unreadable → "[ILLEGIBLE]".
 3. TABLES — Use Markdown tables to preserve tabular data.
-4. HEADERS — Detect visual hierarchy and use Markdown headings (#, ##, ###) appropriately.
+4. HEADINGS — Detect visual hierarchy and use Markdown headings (#, ##, ###) appropriately.
 5. MEDICAL TERMS — Preserve all medical terminology exactly as written.
 
 ===================================================================================================
@@ -64,7 +41,7 @@ QUALITY-ASSURANCE PROTOCOL (perform **before** emitting final output)
 ===================================================================================================
 FAIL-SAFE RULES
 • If text is undecipherable, use "[ILLEGIBLE]" — never invent.
-• Preserve the original structure as much as possible.
+• Preserve original structure as much as possible.
 
 ===================================================================================================
 BEGIN WORK AS SOON AS THE IMAGE IS SUPPLIED. OUTPUT ONLY THE EXTRACTED GFM.
@@ -72,11 +49,13 @@ BEGIN WORK AS SOON AS THE IMAGE IS SUPPLIED. OUTPUT ONLY THE EXTRACTED GFM.
 `;
 
 /**
- * Calls the Z.AI Layout Parsing API (glm-ocr) to extract text from an image.
+ * Calls Z.AI Layout Parsing API (glm-ocr) to extract text from an image.
  * Accepts a base64-encoded image directly.
+ * Processes images within PDF using qwen model for OCR.
  * Returns markdown-formatted text or null on failure.
  */
 async function imageToTextWithZAI(
+  report = false,
   imageBase64: string,
   mimeType: string
 ): Promise<string | null> {
@@ -90,6 +69,8 @@ async function imageToTextWithZAI(
   try {
     const requestBody = {
       model: "glm-ocr",
+      need_layout_visualization: true,
+      return_crop_images: true,
       file: `data:${mimeType};base64,${imageBase64}`,
     };
 
@@ -99,7 +80,7 @@ async function imageToTextWithZAI(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${ZAI_API_KEY}`,
+          Authorization: ZAI_API_KEY,
         },
         body: JSON.stringify(requestBody),
       }
@@ -114,18 +95,121 @@ async function imageToTextWithZAI(
     }
 
     const data = await response.json();
-
-    if (data.md_results) {
-      console.log(
-        `SUCCESS: Z.AI Layout Parsing succeeded for image. Result length: ${data.md_results.length}`
-      );
+    if (report) {
       return data.md_results;
     }
+    console.log("Z.AI Layout Parsing Response:", data);
 
-    console.warn("Z.AI API returned no md_results for image.");
-    return null;
+    if (!data.layout_details || data.layout_details.length === 0) {
+      console.warn("Z.AI API returned no layout_details.");
+      return null;
+    }
+
+    // Get the first page's layout details
+    const page = data.layout_details[0];
+
+    if (!page) {
+      console.warn("Z.AI API returned no layout_details.");
+      return null;
+    }
+
+    // Models to try for image processing
+    const models = [
+      "qwen/qwen3-vl-235b-a22b-instruct",
+      "qwen/qwen3-vl-30b-a3b-instruct",
+      "qwen/qwen3-vl-8b-instruct",
+    ];
+
+    // Initialize OpenRouter client
+    const openRouter = new OpenAI({
+      apiKey: OPENROUTER_API_KEY,
+      baseURL: "https://openrouter.ai/api/v1",
+    });
+
+    // Process the page's layout details
+    const output = await Promise.all(
+      page.map(
+        async (chunk: {
+          native_label?: string;
+          label?: string;
+          content: string;
+        }) => {
+          // Process non-image chunks
+          if (chunk.native_label !== "image" && chunk.label !== "image") {
+            return `\n${chunk.content}\n`;
+          } else {
+            // Process image chunk using qwen model
+            console.log("Processing image from ZAI:", chunk.content);
+            let result = null;
+            let lastError = null;
+
+            for (const model of models) {
+              try {
+                console.log(`Trying model: ${model}`);
+                result = await openRouter.chat.completions.create({
+                  model: model,
+                  temperature: 0,
+                  messages: [
+                    {
+                      role: "user",
+                      content: [
+                        {
+                          type: "text",
+                          text: `> You are an optical character recognition and image analysis engine for a technical Retrieval-Augmented Generation (RAG) system. Your goal is to extract semantic meaning and data for indexing.
+
+> **CORE INSTRUCTIONS:**
+1. **Start Phrase:** Begin immediately with "This is a [image type]..." (e.g., chart, graph, diagram, text block).
+2. **Grounding:** Describe ONLY what is strictly visible. Do not infer, guess, or hallucinate objects that are not clearly defined. If a shape is ambiguous, ignore it or call it "indistinct shape." Do not use external knowledge to fill in gaps.
+3. **Format:** Output a single, dense paragraph.
+
+> **CONTENT-SPECIFIC RULES:**
+- **Charts/Graphs:** Explicitly transcribe axis titles, **units and symbols** (e.g., $, £, %, kg), and range of tick marks. Describe shape/direction of lines (e.g., "upward sloping," "convex"). Crucially, identify and transcribe **key data points** (intersections, maxima, minima) and their labels exactly.
+- **Text:** Transcribe all visible text exactly, preserving case and punctuation.
+- **Logos/Icons:** If a university or corporate logo is present, name entity if legible (e.g., "University of Calgary logo"), but **DO NOT** describe visual design elements (animals, colors, shapes) of logo.
+- **Diagrams:** Explain flow or relationship between components.
+
+> **FINAL CHECK:** Ensure no visual artifacts (scrollbars, cursors) are described. Verify that specific symbols (like currency signs on axes) are included if present.
+`,
+                        },
+                        {
+                          type: "image_url",
+                          image_url: {
+                            url: chunk.content,
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                });
+
+                console.log(
+                  `Successfully processed image with model: ${model}`
+                );
+                break;
+              } catch (error) {
+                lastError = error;
+                console.error(`Failed with model ${model}:`, error);
+              }
+            }
+
+            if (!result) {
+              throw new Error(
+                `All models failed to process image. Last error: ${lastError}`
+              );
+            }
+
+            const imageDescription = result.choices[0]?.message?.content || "";
+
+            return `\n\n<Image>\n<ImageDescription>${imageDescription}</ImageDescription>\n</Image>\n\n`;
+          }
+        }
+      )
+    );
+
+    const finalText = output.join("");
+    return finalText;
   } catch (error) {
-    console.error("FAILURE: Z.AI Layout Parsing API call failed for image.");
+    console.error("FAILURE: Z.AI Layout Parsing API call failed.");
     if (error instanceof Error) {
       console.error("Error Message:", error.message);
     }
@@ -136,19 +220,19 @@ async function imageToTextWithZAI(
 /**
  * Extract text from an image.
  * Primary: Z.AI Layout Parsing (glm-ocr) with base64 image input.
- * Fallback: Gemini vision, then OpenRouter.
+ * Fallback: Gemini Vision, then OpenRouter.
  */
-export async function imageToText(
+async function imageToText(
   imageBase64: string,
   mimeType: string
 ): Promise<string | null> {
   // ── Primary: Z.AI Layout Parsing (glm-ocr) ──
-  const zaiResult = await imageToTextWithZAI(imageBase64, mimeType);
+  const zaiResult = await imageToTextWithZAI(true, imageBase64, mimeType);
   if (zaiResult) {
     return zaiResult;
   }
   console.log(
-    "Z.AI Layout Parsing failed or unavailable for image, falling back to Gemini..."
+    "Z.AI Layout Parsing failed or unavailable, falling back to Gemini..."
   );
 
   // ── Fallback: Gemini Vision ──
@@ -205,38 +289,7 @@ export async function imageToText(
     }
   }
 
-  // ── Last Resort: OpenRouter ──
-  console.log("Gemini failed, trying OpenRouter fallback...");
-  try {
-    const result = await openRouter.chat.completions.create({
-      model: "google/gemini-2.0-flash-001",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${mimeType};base64,${imageBase64}`,
-              },
-            },
-          ],
-        },
-      ],
-      max_tokens: 8000,
-    });
-
-    const text = result.choices[0]?.message?.content;
-    if (text) {
-      console.log("SUCCESS: OpenRouter fallback succeeded.");
-      return text;
-    }
-  } catch (error) {
-    console.error("OpenRouter fallback also failed:", error);
-  }
-
-  console.error("All API attempts failed. Unable to process the image.");
+  console.error("All API attempts failed. Unable to process image.");
   return null;
 }
 
@@ -260,7 +313,7 @@ export async function processUserDataFiles(
       console.log(`Processing file: ${file.name} (${file.type})`);
 
       if (file.type === "pdf") {
-        // Use existing PDF processing
+        // Use PDF processing
         const pdfText = await processPdfAndConvertToText([file.base64]);
         if (pdfText) {
           textParts.push(`## File: ${file.name}\n\n${pdfText}`);
@@ -277,7 +330,7 @@ export async function processUserDataFiles(
       }
     }
 
-    const fullText = textParts.join("\n\n---\n\n");
+    const fullText = textParts.join("\n---\n\n");
     console.log("Full text length:", fullText.length);
     return fullText;
   } catch (error) {
@@ -290,7 +343,9 @@ export async function processUserDataFiles(
  * Get MIME type based on file extension.
  */
 function getMimeType(filename: string): string {
-  const ext = filename.split(".").pop()?.toLowerCase();
+  const ext = filename.split(".").pop();
+  if (!ext) return "image/jpeg";
+
   const mimeTypes: Record<string, string> = {
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
@@ -300,5 +355,24 @@ function getMimeType(filename: string): string {
     bmp: "image/bmp",
     svg: "image/svg+xml",
   };
-  return mimeTypes[ext || ""] || "image/jpeg";
+  return mimeTypes[ext] || "image/jpeg";
+}
+
+/**
+ * Retrieves and validates Gemini API keys from environment variables.
+ */
+function getApiKeys(): string[] {
+  const apiKeys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY2,
+    process.env.KeyForRoadmap_API_KEY,
+    process.env.GEMINI_API_KEY3,
+  ].filter((key): key is string => !!key);
+
+  if (apiKeys.length === 0) {
+    console.error("No GEMINI_API_KEY environment variables are set.");
+    throw new Error("Server configuration error: Missing Gemini API Keys.");
+  }
+
+  return apiKeys;
 }

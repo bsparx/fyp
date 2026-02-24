@@ -34,6 +34,7 @@ import {
     Lock,
     Shield,
 } from "lucide-react"
+import { createUser } from "../data/actions"
 
 function generateStrongPassword(length: number = 16): string {
     const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -154,23 +155,15 @@ export default function NewUserPage() {
         setApiError("")
 
         try {
-            const response = await fetch("/api/users", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    username: formData.username,
-                    email: formData.email,
-                    password: formData.password,
-                    role: formData.role,
-                }),
-            })
+            const result = await createUser(
+                formData.username,
+                formData.email,
+                formData.password,
+                formData.role
+            )
 
-            const data = await response.json()
-
-            if (!response.ok) {
-                setApiError(data.error || "Failed to create user")
+            if (!result.success) {
+                setApiError(result.message || "Failed to create user")
                 return
             }
 
@@ -402,8 +395,8 @@ export default function NewUserPage() {
                                                     <div
                                                         key={level}
                                                         className={`h-1.5 flex-1 rounded-full transition-colors ${level <= passwordStrength.strength
-                                                                ? passwordStrength.color
-                                                                : "bg-muted"
+                                                            ? passwordStrength.color
+                                                            : "bg-muted"
                                                             }`}
                                                     />
                                                 ))}

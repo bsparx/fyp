@@ -5,11 +5,122 @@ import { revalidatePath } from "next/cache";
 import { processUserDataFiles } from "@/utils/userDataProcessing";
 import { embedAndStorePatientDocument } from "@/utils/embeddings";
 import { extractReportDataWithAI } from "@/utils/reportExtractor";
+import cloudinary from "@/utils/cloudinary";
+import { clerkClient } from "@clerk/nextjs/server";
+import { Role } from "@/app/generated/prisma/enums";
 
 export interface UploadUserDocumentResult {
   success: boolean;
   message: string;
   documentId?: string;
+  documentsCreated?: number;
+}
+
+export interface CreateUserResult {
+  success: boolean;
+  message: string;
+  user?: {
+    id: string;
+    clerkId: string;
+    email: string;
+    name: string | null;
+    role: Role;
+  };
+}
+
+/**
+ * Create a new user in both Clerk and the database
+ */
+export async function createUser(
+  username: string,
+  email: string,
+  password: string,
+  role: string
+): Promise<CreateUserResult> {
+  // Validate required fields
+  if (!username || !email || !password || !role) {
+    return { success: false, message: "Missing required fields" };
+  }
+
+  // Validate role
+  if (!["ADMIN", "DOCTOR", "PATIENT"].includes(role)) {
+    return {
+      success: false,
+      message: "Invalid role. Must be ADMIN, DOCTOR, or PATIENT",
+    };
+  }
+
+  try {
+    // Create user in Clerk
+    const clerk = await clerkClient();
+    const clerkUser = await clerk.users.createUser({
+      emailAddress: [email],
+      password: password,
+      username: username,
+      publicMetadata: {
+        role: role,
+      },
+    });
+
+    // Create user in database
+    const dbUser = await prisma.user.create({
+      data: {
+        clerkId: clerkUser.id,
+        email: email,
+        name: username,
+        role: role as Role,
+      },
+    });
+
+    revalidatePath("/dashboard/users");
+
+    return {
+      success: true,
+      message: "User created successfully",
+      user: {
+        id: dbUser.id,
+        clerkId: dbUser.clerkId,
+        email: dbUser.email,
+        name: dbUser.name ?? username,
+        role: dbUser.role,
+      },
+    };
+  } catch (error: unknown) {
+    console.error("Error creating user:", error);
+
+    // Handle Clerk-specific errors
+    if (error && typeof error === "object" && "errors" in error) {
+      const clerkError = error as {
+        errors: Array<{ message: string; code: string }>;
+      };
+      const firstError = clerkError.errors[0];
+
+      if (firstError?.code === "form_identifier_exists") {
+        return {
+          success: false,
+          message: "A user with this email or username already exists",
+        };
+      }
+
+      return {
+        success: false,
+        message: firstError?.message || "Failed to create user in Clerk",
+      };
+    }
+
+    // Handle Prisma unique constraint errors
+    if (error && typeof error === "object" && "code" in error) {
+      const prismaError = error as { code: string };
+      if (prismaError.code === "P2002") {
+        return {
+          success: false,
+          message: "A user with this email already exists in the database",
+        };
+      }
+    }
+
+    return { success: false, message: "Internal server error" };
+  }
 }
 
 interface FileData {
@@ -24,8 +135,8 @@ export type PatientDataType = "REPORT" | "COMMENT";
  * Upload and process PDF/Image documents for a user.
  * Stores documents in the database with PATIENT type.
  * Supports two data types:
- * - COMMENT: Semantic ingestion into vector database
- * - REPORT: Extract key-value pairs from medical reports
+ * - COMMENT: Semantic ingestion into vector database (OCR only)
+ * - REPORT: Extract key-value pairs from medical reports (AI extraction)
  */
 export async function uploadUserDocument(
   formData: FormData
@@ -35,6 +146,7 @@ export async function uploadUserDocument(
     const userId = formData.get("userId") as string;
     const filesJson = formData.get("files") as string;
     const dataType = (formData.get("dataType") as PatientDataType) || "COMMENT";
+    console.log(dataType, "dataType");
 
     if (!title) {
       return { success: false, message: "Document title is required." };
@@ -78,170 +190,215 @@ export async function uploadUserDocument(
     const verifiedUserId = userExists.id;
     console.log(`Using verified user ID: "${verifiedUserId}"`);
 
-    // Process files and extract text
-    const extractedText = await processUserDataFiles(files);
+    // Process each file separately as its own document — all in parallel
+    const totalFiles = files.length;
 
-    // Log the OCR result for debugging
-    console.log("=== OCR RESULT START ===");
-    console.log(extractedText);
-    console.log("=== OCR RESULT END ===");
+    const processFile = async (
+      file: FileData,
+      index: number
+    ): Promise<{ success: boolean; testValues: number; error?: string }> => {
+      const fileTitle = totalFiles === 1 ? title : `${title}-${index + 1}`;
+      const singleFileArray = [file];
 
-    if (!extractedText) {
+      console.log(
+        `Processing file ${index + 1}/${totalFiles}: ${
+          file.name
+        } as "${fileTitle}" (${dataType})`
+      );
+
+      try {
+        // Process this single file and extract text
+        const extractedText = await processUserDataFiles(singleFileArray);
+
+        if (!extractedText) {
+          console.error(`Failed to extract text from file: ${file.name}`);
+          return {
+            success: false,
+            testValues: 0,
+            error: `Failed to extract text from ${file.name}.`,
+          };
+        }
+
+        console.log(
+          `File ${file.name}: Extracted ${extractedText.length} characters of text.`
+        );
+
+        // Store the single file's data
+        const content = JSON.stringify({
+          files: [
+            {
+              name: file.name,
+              type: file.type,
+              data: file.base64,
+            },
+          ],
+          extractedText,
+        });
+
+        if (dataType === "COMMENT") {
+          // COMMENT type: OCR and embed each file separately
+          const document = await prisma.document.create({
+            data: {
+              title: fileTitle,
+              content,
+              type: "PATIENT",
+              patientDataType: dataType,
+              isIngested: false,
+              userId: verifiedUserId,
+            },
+          });
+
+          console.log(
+            `Created comment document record: ${document.id} for file ${file.name}`
+          );
+
+          // Embed and store in Pinecone with patient metadata (run in background)
+          embedAndStorePatientDocument(
+            document.id,
+            extractedText,
+            fileTitle,
+            verifiedUserId
+          )
+            .then((success) => {
+              if (success) {
+                console.log(
+                  `Successfully embedded patient document: ${document.id}`
+                );
+              } else {
+                console.error(
+                  `Failed to embed patient document: ${document.id}`
+                );
+              }
+            })
+            .catch((error) => {
+              console.error(
+                `Error embedding patient document: ${document.id}`,
+                error
+              );
+            });
+
+          return { success: true, testValues: 0 };
+        } else {
+          // REPORT type: AI extraction for each file separately
+          const extractedData = await extractReportDataWithAI(extractedText);
+
+          // Parse the report date if provided
+          let reportDate: Date | null = null;
+          if (extractedData.reportDate) {
+            try {
+              reportDate = new Date(extractedData.reportDate);
+              if (isNaN(reportDate.getTime())) {
+                reportDate = null;
+              }
+            } catch {
+              reportDate = null;
+            }
+          }
+
+          const document = await prisma.document.create({
+            data: {
+              title: fileTitle,
+              content,
+              type: "PATIENT",
+              patientDataType: dataType,
+              isIngested: false,
+              userId: verifiedUserId,
+            },
+          });
+
+          console.log(
+            `Created report document record: ${document.id} for file ${file.name}`
+          );
+
+          // Upload the file to Cloudinary
+          const mimeType =
+            file.type === "pdf" ? "application/pdf" : "image/png";
+          const dataUri = `data:${mimeType};base64,${file.base64}`;
+
+          const uploadResult = await cloudinary.uploader.upload(dataUri, {
+            resource_type: file.type === "pdf" ? "raw" : "image",
+            folder: `medical_reports/${verifiedUserId}`,
+            public_id: `report_${document.id}_${Date.now()}${
+              file.type === "pdf" ? ".pdf" : ""
+            }`,
+          });
+
+          console.log(
+            `Uploaded file to Cloudinary: ${uploadResult.secure_url}`
+          );
+
+          // Create medical report record with key-value pairs
+          const medicalReport = await prisma.medicalReport.create({
+            data: {
+              documentId: document.id,
+              userId: verifiedUserId,
+              hospitalName: extractedData.hospitalName,
+              markdown: extractedText,
+              reportDate: reportDate,
+              reportURL: uploadResult.secure_url,
+              reportValues: {
+                create: extractedData.testValues.map((tv) => ({
+                  key: tv.key,
+                  value: tv.value,
+                  unit: tv.unit,
+                  userId: verifiedUserId,
+                })),
+              },
+            },
+          });
+
+          console.log(
+            `Created medical report: ${medicalReport.id} with ${extractedData.testValues.length} values for file ${file.name}`
+          );
+
+          return { success: true, testValues: extractedData.testValues.length };
+        }
+      } catch (fileError) {
+        console.error(`Error processing file ${file.name}:`, fileError);
+        return {
+          success: false,
+          testValues: 0,
+          error: `Error processing ${file.name}.`,
+        };
+      }
+    };
+
+    // Run all file processing in parallel
+    const results = await Promise.all(
+      files.map((file, index) => processFile(file, index))
+    );
+
+    const successCount = results.filter((r) => r.success).length;
+    const totalTestValues = results.reduce((sum, r) => sum + r.testValues, 0);
+    const errors = results.filter((r) => r.error).map((r) => r.error as string);
+
+    revalidatePath("/dashboard/users/data");
+
+    if (successCount === 0) {
       return {
         success: false,
-        message: "Failed to extract text from files. Please try again.",
+        message: `Failed to process any files. ${errors.join(" ")}`,
       };
     }
 
-    console.log(`Extracted ${extractedText.length} characters of text.`);
-
-    // Create document record in database with PATIENT type
-    // Store both extracted text and original file data
-    const content = JSON.stringify({
-      files: files.map((f) => ({
-        name: f.name,
-        type: f.type,
-        data: f.base64,
-      })),
-      extractedText,
-    });
-
-    const document = await prisma.document.create({
-      data: {
-        title,
-        content,
-        type: "PATIENT",
-        patientDataType: dataType,
-        isIngested: false, // Will be marked as ingested after embedding (comments only)
-        userId: verifiedUserId,
-      },
-    });
-
-    console.log(`Created document record: ${document.id}`);
-
     if (dataType === "COMMENT") {
-      // Embed and store in Pinecone with patient metadata (run in background)
-      embedAndStorePatientDocument(
-        document.id,
-        extractedText,
-        title,
-        verifiedUserId
-      )
-        .then((success) => {
-          if (success) {
-            console.log(
-              `Successfully embedded patient document: ${document.id}`
-            );
-          } else {
-            console.error(`Failed to embed patient document: ${document.id}`);
-          }
-        })
-        .catch((error) => {
-          console.error(
-            `Error embedding patient document: ${document.id}`,
-            error
-          );
-        });
-
-      revalidatePath("/dashboard/users/data");
-
+      const errorSuffix =
+        errors.length > 0
+          ? ` (${errors.length} file(s) failed: ${errors.join(" ")})`
+          : "";
       return {
         success: true,
-        message:
-          "Comment uploaded successfully! Processing embeddings in the background.",
-        documentId: document.id,
+        message: `${successCount}/${totalFiles} comment(s) uploaded successfully! Processing embeddings in the background.${errorSuffix}`,
       };
     } else {
-      // REPORT type: Use AI to extract structured key-value pairs
-      try {
-        // Step 1: Use AI to extract structured data from the OCR text
-        console.log("Starting AI extraction for medical report...");
-        const extractedData = await extractReportDataWithAI(extractedText);
-
-        // Parse the report date if provided
-        let reportDate: Date | null = null;
-        if (extractedData.reportDate) {
-          try {
-            reportDate = new Date(extractedData.reportDate);
-            if (isNaN(reportDate.getTime())) {
-              reportDate = null;
-            }
-          } catch {
-            reportDate = null;
-          }
-        }
-
-        // Create medical report record with key-value pairs
-        const medicalReport = await prisma.medicalReport.create({
-          data: {
-            documentId: document.id,
-            userId: verifiedUserId,
-            hospitalName: extractedData.hospitalName,
-            reportDate: reportDate,
-            reportValues: {
-              create: extractedData.testValues.map((tv) => ({
-                key: tv.key,
-                value: tv.value,
-                unit: tv.unit,
-                userId: verifiedUserId,
-              })),
-            },
-          },
-        });
-
-        console.log(
-          `Created medical report: ${medicalReport.id} with ${extractedData.testValues.length} values`
-        );
-
-        // Step 2: Also embed the full OCR text in vector database (same as comments)
-        // This allows semantic search across all patient documents
-        embedAndStorePatientDocument(
-          document.id,
-          extractedText,
-          title,
-          verifiedUserId
-        )
-          .then((success) => {
-            if (success) {
-              console.log(
-                `Successfully embedded report document: ${document.id}`
-              );
-              // Mark document as ingested after embedding completes
-              prisma.document
-                .update({
-                  where: { id: document.id },
-                  data: { isIngested: true },
-                })
-                .catch((err) =>
-                  console.error("Error updating isIngested:", err)
-                );
-            } else {
-              console.error(`Failed to embed report document: ${document.id}`);
-            }
-          })
-          .catch((error) => {
-            console.error(
-              `Error embedding report document: ${document.id}`,
-              error
-            );
-          });
-
-        revalidatePath("/dashboard/users/data");
-
-        return {
-          success: true,
-          message: `Report uploaded successfully! Extracted ${extractedData.testValues.length} test values. Processing embeddings in the background.`,
-          documentId: document.id,
-        };
-      } catch (parseError) {
-        console.error("Error extracting report data:", parseError);
-        return {
-          success: true,
-          message:
-            "Report uploaded but failed to extract structured data. The raw text has been saved.",
-          documentId: document.id,
-        };
-      }
+      const errorSuffix =
+        errors.length > 0
+          ? ` (${errors.length} file(s) failed: ${errors.join(" ")})`
+          : "";
+      return {
+        success: true,
+        message: `${successCount}/${totalFiles} report(s) uploaded successfully! Extracted ${totalTestValues} total test values.${errorSuffix}`,
+      };
     }
   } catch (error) {
     console.error("Error uploading user document:", error);
@@ -252,6 +409,81 @@ export async function uploadUserDocument(
           ? error.message
           : "An unexpected error occurred.",
     };
+  }
+}
+
+/**
+ * Get user details by ID.
+ */
+export async function getUserById(userId: string) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role as "ADMIN" | "DOCTOR" | "PATIENT",
+      createdAt: user.createdAt.toISOString(),
+    };
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    return null;
+  }
+}
+
+/**
+ * Get all users with document count (PATIENT role only)
+ */
+export async function getAllUsersWithDocumentCount() {
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        role: "PATIENT",
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        _count: {
+          select: {
+            documents: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return users.map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role as "ADMIN" | "DOCTOR" | "PATIENT",
+      createdAt: user.createdAt.toISOString(),
+      _count: {
+        documents: user._count.documents,
+      },
+    }));
+  } catch (error) {
+    console.error("Error fetching users with document count:", error);
+    return [];
   }
 }
 
@@ -349,7 +581,9 @@ export async function getMedicalReportDetails(documentId: string) {
       documentId: medicalReport.documentId,
       hospitalName: medicalReport.hospitalName,
       reportDate: medicalReport.reportDate?.toISOString() || null,
+      reportURL: medicalReport.reportURL,
       createdAt: medicalReport.createdAt.toISOString(),
+      markdown: medicalReport.markdown,
       values: medicalReport.reportValues.map((v) => ({
         id: v.id,
         key: v.key,
@@ -359,6 +593,71 @@ export async function getMedicalReportDetails(documentId: string) {
     };
   } catch (error) {
     console.error("Error fetching medical report details:", error);
+    return null;
+  }
+}
+
+export interface DocumentDetails {
+  parentChunks: number;
+  childChunks: number;
+  files: Array<{
+    name: string;
+    type: string;
+    url: string;
+  }>;
+}
+
+/**
+ * Get document details including parent/child chunks count and files
+ */
+export async function getDocumentDetails(
+  documentId: string
+): Promise<DocumentDetails | null> {
+  try {
+    // Verify document exists
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: {
+        id: true,
+        content: true,
+      },
+    });
+
+    if (!document) {
+      return null;
+    }
+
+    // Get parent chunks count
+    const parentChunksCount = await prisma.parentChunk.count({
+      where: { documentId },
+    });
+
+    // Get child chunks count
+    const childChunksCount = await prisma.ragChunk.count({
+      where: { documentId },
+    });
+
+    // Parse content to get files
+    const files: Array<{ name: string; type: string; url: string }> = [];
+    try {
+      const content = document.content || "";
+      if (typeof content === "string") {
+        const parsedContent = JSON.parse(content);
+        if (parsedContent.files && Array.isArray(parsedContent.files)) {
+          files.push(...parsedContent.files);
+        }
+      }
+    } catch (e) {
+      console.error("Error parsing document content:", e);
+    }
+
+    return {
+      parentChunks: parentChunksCount,
+      childChunks: childChunksCount,
+      files,
+    };
+  } catch (error) {
+    console.error("Error fetching document details:", error);
     return null;
   }
 }

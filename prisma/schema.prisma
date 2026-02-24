@@ -16,8 +16,13 @@ datasource db {
   // directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
+
+// --------------------------------------
+// ENUMS
+// --------------------------------------
+
 enum Role {
-  ADMINISTRATOR
+  ADMIN   // Standardized from ADMIN/ADMINISTRATOR
   DOCTOR
   PATIENT
 }
@@ -37,19 +42,33 @@ enum PatientDataType {
   COMMENT
 }
 
-model User {
-  id          String   @id @default(cuid())
-  clerkId     String   @unique
-  email       String   @unique
-  name        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// --------------------------------------
+// CORE USER MODEL (Merged)
+// --------------------------------------
 
-  role        Role     @default(PATIENT)
-  documents   Document[]
-  medicalReports MedicalReport[]
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  role      Role     @default(PATIENT)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- Relations: RAG / Document System (Schema 1) ---
+  documents           Document[]
+  medicalReports      MedicalReport[]
   medicalReportValues MedicalReportValue[]
+
+  // --- Relations: Hospital Management System (Schema 2) ---
+  doctorProfile       DoctorProfile?
+  patientProfile      PatientProfile?
 }
+
+// --------------------------------------
+// RAG & DOCUMENT SYSTEM (Schema 1)
+// --------------------------------------
 
 model Document {
   id              String       @id @default(cuid())
@@ -61,7 +80,7 @@ model Document {
   patientDataType PatientDataType?
   isIngested      Boolean      @default(false)
   
-  // Optional relation to User (who this document belongs to)
+  // Relation to User
   userId          String?
   user            User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   
@@ -111,7 +130,8 @@ model MedicalReport {
   id              String   @id @default(cuid())
   documentId      String
   document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  
+  markdown        String?
+  reportURL       String?  // URL to the generated PDF report
   // Report metadata
   reportDate      DateTime?
   hospitalName    String?
@@ -149,3 +169,135 @@ model MedicalReportValue {
   @@index([userId])
 }
 
+// --------------------------------------
+// HOSPITAL MANAGEMENT SYSTEM (Schema 2)
+// --------------------------------------
+
+// Doctor Schema
+model DoctorProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id])
+  specialization String
+  
+  appointments   Appointment[]
+  prescriptions  Prescription[]
+}
+
+// Patient Schema
+model PatientProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Demographics
+  dateOfBirth    DateTime?
+  gender         String?
+  phone          String?
+  address        String?
+  emergencyContact String?
+
+  // Medical Stats
+  bloodType      String?
+  height         String? // Stored as string to match "5'11"" or "180cm" flexible for now
+  weight         String? // Stored as string "160 lbs"
+  
+  // Clinical Data
+  allergies      String? // Comma separated
+  conditions     String? // Comma separated chronic conditions
+  
+  // AI Summary
+  aiSummary      String?
+  
+  appointments   Appointment[]
+  prescriptions  Prescription[]
+  healthMetrics  HealthMetric[]
+  notes          PatientNote[]
+  reminders      PatientReminder[]
+}
+
+// Prescription
+model Prescription {
+  id          String   @id @default(uuid())
+  name        String
+  dosage      String
+  frequency   String
+  startDate   DateTime
+  endDate     DateTime?
+  status      String   @default("ACTIVE") // ACTIVE, COMPLETED, DISCONTINUED
+  prescribedBy String? // Doctor name fallback
+  
+  patientId   String
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  doctorId    String?
+  doctor      DoctorProfile? @relation(fields: [doctorId], references: [id])
+}
+
+// Health Metrics for Trends (Manually added or device synced)
+model HealthMetric {
+  id          String   @id @default(uuid())
+  type        String   // "Blood Pressure", "Heart Rate", "Weight"
+  value       String   // "120/80", "72"
+  unit        String?  // "mmHg", "bpm"
+  trend       String?  // "up", "down", "stable"
+  status      String?  // "Normal", "Warning"
+  date        DateTime @default(now())
+  
+  patientId   String
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+// Patient Note
+model PatientNote {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  tags      String? // Comma separated tags
+  date      DateTime @default(now())
+  
+  patientId String
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+// Patient Reminder
+model PatientReminder {
+  id        String   @id @default(uuid())
+  text      String
+  date      DateTime @default(now())
+  isCompleted Boolean @default(false)
+
+  patientId String
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+// Appointment
+model Appointment {
+  id        String   @id @default(uuid())
+  date      DateTime
+  status    String   @default("PENDING") // PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED
+  reason    String?
+  notes     String?
+  
+  // Clinical Copilot Fields
+  recordingUrl   String?  // URL to stored audio file
+  transcript     Json?    // Structured transcript: [{ speaker: "doctor" | "patient", text: "...", timestamp: 0.5 }]
+  
+  // SOAP Notes - Storing as JSON allows flexibility 
+  soapNote       Json?    
+  
+  // Generated PDF
+  soapNoteUrl    String?  // URL to the generated PDF of the SOAP note
+
+  // Metadata for AI processing status
+  aiStatus       String?  // "PROCESSING", "COMPLETED", "FAILED"
+
+  doctorId  String?
+  doctor    DoctorProfile? @relation(fields: [doctorId], references: [id])
+  
+  patientId String
+  patient   PatientProfile @relation(fields: [patientId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
