@@ -633,10 +633,10 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                     multiple={true}
                                     className="hidden"
                                     onChange={handleFileChange}
-                                    disabled={isLoading || files.length >= 10}
+                                    disabled={isLoading || files.length >= 5}
                                 />
 
-                                {files.length < 10 && (
+                                {files.length < 5 && (
                                     <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center hover:border-blue-500 dark:hover:border-blue-400 bg-slate-50/50 dark:bg-slate-800/30 transition-colors duration-200">
                                         <div className="space-y-3">
                                             <div className="mx-auto w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
@@ -654,7 +654,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                                 </label>
                                             </div>
                                             <p className="text-xs text-slate-500 dark:text-slate-400">
-                                                PDF and image files only, up to 10MB each • {10 - files.length} slot(s) remaining
+                                                PDF and image files only, up to 10MB each • {5 - files.length} slot(s) remaining
                                             </p>
                                         </div>
                                     </div>
@@ -694,7 +694,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                     </div>
                                 )}
 
-                                {files.length >= 10 && (
+                                {files.length >= 5 && (
                                     <p className="text-amber-600 dark:text-amber-400 text-sm flex items-center gap-1.5">
                                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400"></span>
                                         Maximum of 5 files reached
