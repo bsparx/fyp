@@ -8,7 +8,8 @@ import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
 
 const openRouter = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
+  baseURL:
+    "https://muddasirjaved9--example-qwen3-5-4b-awq-inference-vllmser-8bd3d3.modal.run/v1",
   apiKey: process.env.OPENROUTER_API_KEY || "",
 });
 
@@ -47,15 +48,16 @@ export interface ExtractedReportData {
   conclusion: string | null;
 }
 
-interface ReportMetadata {
-  hospitalName: string | null;
-  reportDate: string | null;
-  passed: boolean;
-}
+//// interface ReportMetadata {
+//  hospitalName: string | null;
+//  reportDate: string | null;
+////  passed: boolean;
+//}
 
 interface FidelityScoreResult {
   fidelityScore: number;
   explanation: string;
+  passed: boolean;
 }
 
 // ============================================================================
@@ -152,304 +154,8 @@ async function prepareImageInput(
 }
 
 // ============================================================================
-// PROMPTS
-// ============================================================================
-
-const FIDELITY_SCORE_PROMPT = `You are a quality assurance specialist for medical report processing pipelines. Your task is to evaluate the accuracy and fidelity of an automated medical report extraction system.
-
-You will be provided with:
-1. The original medical report image (or first page of PDF)
-2. OCR text extracted from the document
-3. Extracted key-value pairs from the report
-4. Extracted hospital name (if available)
-5. Extracted report date (if available)
-
-Your task is to:
-1. Compare the extracted data against the original image
-2. Evaluate the accuracy of each extracted field
-3. Assign a fidelity score from 0.0 to 1.0:
-   - 1.0 = Perfect extraction (all fields 100% accurate, no missing data)
-   - 0.8-0.9 = Excellent extraction (minor formatting issues, all critical data correct)
-   - 0.6-0.7 = Good extraction (some minor errors or omissions)
-   - 0.4-0.5 = Fair extraction (several errors or missing important data)
-   - 0.2-0.3 = Poor extraction (many errors, significant data missing)
-   - 0.0-0.1 = Failed extraction (critical failures, unusable output)
-
-SCORING CRITERIA:
-- Key-value pair accuracy: 40% weight
-  * Count correctly extracted values vs total values visible in document
-  * Penalize incorrect values more than missing values
-- Metadata accuracy: 20% weight
-  * Hospital name and report date correctness
-- Completeness: 20% weight
-  * Are all visible values extracted?
-  * Are there any obvious omissions?
-- Formatting consistency: 10% weight
-  * Proper uppercase/lowercase usage
-  * Unit consistency
-- Overall reliability: 10% weight
-  * Would you trust this extraction for medical decisions?
-
-Provide a brief explanation for your score, highlighting specific areas of success or failure.`;
-
-// ============================================================================
 // EXTRACTION FUNCTIONS
 // ============================================================================
-
-/**
- * Extract test values (key-value pairs) using AI
- */
-async function extractTestValues(
-  ocrText: string
-): Promise<ExtractedReportValue[]> {
-  console.log("=== STARTING TEST VALUES EXTRACTION ===");
-
-  try {
-    const TEST_VALUES_EXTRACTION_PROMPT = `You are a medical test values extraction assistant. Your task is to extract test results from medical/lab reports.
-
-From the provided OCR text of a medical report, extract ALL test values with their names, values, and units.
-
-IMPORTANT RULES:
-- If a value has no unit, set unit to null
-- Extract ALL test values you can find in the report
-- Be precise with numerical values - include decimals exactly as shown
-- Common test names include: VITAMIN D, VITAMIN D2, VITAMIN D3, TSH, T3, T4, HBA1C, HEMOGLOBIN, GLUCOSE, CHOLESTEROL, etc.
-
-Analyze the following OCR text and extract the test values:
-
-OCRTEXT:
-${ocrText}`;
-    const response = await openRouter.chat.completions.create({
-      model: "qwen/qwen3.5-9b",
-      reasoning_effort: "none",
-      temperature: 0,
-      messages: [
-        {
-          role: "user",
-          content: TEST_VALUES_EXTRACTION_PROMPT,
-        },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "medical_test_values",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              testValues: {
-                type: "array",
-                description: "Array of extracted test values",
-                items: {
-                  type: "object",
-                  properties: {
-                    key: {
-                      type: "string",
-                      description: "Test name",
-                    },
-                    value: {
-                      type: "string",
-                      description: "The numerical or text value of the test",
-                    },
-                    unit: {
-                      type: ["string", "null"],
-                      description: "Unit of measurement, or null if none",
-                    },
-                  },
-                  required: ["key", "value", "unit"],
-                  additionalProperties: false,
-                },
-              },
-            },
-            required: ["testValues"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
-
-    const content = response.choices[0]?.message?.content;
-
-    if (!content) {
-      console.error("No content in test values AI response");
-      return [];
-    }
-
-    console.log("=== TEST VALUES EXTRACTION RAW RESPONSE ===");
-    console.log(content);
-    console.log("=== END TEST VALUES EXTRACTION RAW RESPONSE ===");
-
-    const parsed = JSON.parse(content);
-    const testValues: ExtractedReportValue[] = parsed.testValues || [];
-
-    // Ensure all keys and units are uppercase (double-check)
-    const normalizedTestValues = testValues.map((tv) => ({
-      key: tv.key.toUpperCase(),
-      value: tv.value,
-      unit: tv.unit ? tv.unit : null,
-    }));
-
-    console.log("=== PARSED TEST VALUES RESULT ===");
-    console.log(`Test Values (${normalizedTestValues.length}):`);
-    normalizedTestValues.forEach((tv, i) => {
-      console.log(`  ${i + 1}. ${tv.key} = ${tv.value} ${tv.unit || ""}`);
-    });
-    console.log("=== END PARSED TEST VALUES RESULT ===");
-
-    return normalizedTestValues;
-  } catch (error) {
-    console.error("Error in test values extraction:", error);
-    return [];
-  }
-}
-
-/**
- * Extract metadata and validate using vision model (Qwen/Qwen-8b-VL)
- */
-async function extractMetadataWithVision(
-  imageBase64: string,
-  ocrText: string,
-  testValues: ExtractedReportValue[]
-): Promise<ReportMetadata> {
-  console.log("=== STARTING VISION METADATA EXTRACTION AND VALIDATION ===");
-
-  try {
-    // Prepare the test values summary for the prompt
-    const testValuesSummary = testValues
-      .map((tv) => `- ${tv.key}: ${tv.value} ${tv.unit || ""}`)
-      .join("\n");
-
-    const userContent = `
-OCR TEXT:
-${ocrText}
-
-EXTRACTED KEY-VALUE PAIRS:
-${testValuesSummary || "No values extracted"}
-
-Please analyze the image and extract the hospital name, report date, and validate the extracted key-value pairs.
-`;
-    const VISION_METADATA_EXTRACTION_PROMPT = `You are a medical report analysis assistant. Your task is to extract metadata and validate previously extracted test values from a medical report image.
-
-You will be provided with:
-1. An image of the medical report
-2. Key-value pairs that have been extracted from the report
-
-Your task is to:
-1. Extract the hospital/laboratory name from the image.
-2. Extract the report date from the image.
-3. Validate that all provided key-value pairs are 100% correct by cross-referencing with the image.
-4. Check that no test values from the image are missing in the extracted data.
-
-CRITICAL RULES:
-- Hospital Name: Extract EXACTLY as shown in the document. If not found, return null.
-- Report Date: Extract strictly in YYYY-MM-DD format. If not found, return null.
-- Validation:
-  * Be incredibly strict. 
-  * Set "passed" to true ONLY if all key-value pairs are perfectly correct AND complete with no errors or omissions.
-
-OUTPUT FORMAT:
-You must respond ONLY with a valid JSON object. Do not include markdown formatting like \`\`\`json. Use this exact schema:
-{
-  "hospital_name": "String or null",
-  "report_date": "YYYY-MM-DD or null",
-  "passed": boolean
-}
-
-Analyze the provided image and data carefully.
-
-EXTRACTED KEY-VALUE PAIRS TO VALIDATE:
----
-${testValuesSummary || "No values extracted"}
----
-`;
-    const response = await openRouter.chat.completions.create({
-      model: "qwen/qwen3.5-9b",
-      reasoning_effort: "none",
-      temperature: 0,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image_url",
-              image_url: {
-                url: imageBase64,
-              },
-            },
-            {
-              type: "text",
-              text: VISION_METADATA_EXTRACTION_PROMPT,
-            },
-          ],
-        },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "medical_report_metadata_validation",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              hospitalName: {
-                type: ["string", "null"],
-                description: "Name of the hospital or laboratory.",
-              },
-              reportDate: {
-                type: ["string", "null"],
-                description: "Date of the report in YYYY-MM-DD format",
-              },
-              passed: {
-                type: "boolean",
-                description:
-                  "True only if ALL key-value pairs are 100% correct and complete",
-              },
-            },
-            required: ["hospitalName", "reportDate", "passed"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
-
-    const content = response.choices[0]?.message?.content;
-
-    if (!content) {
-      console.error("No content in vision metadata AI response");
-      return {
-        hospitalName: null,
-        reportDate: null,
-        passed: false,
-      };
-    }
-
-    console.log("=== VISION METADATA EXTRACTION RAW RESPONSE ===");
-    console.log(content);
-    console.log("=== END VISION METADATA EXTRACTION RAW RESPONSE ===");
-
-    const metadata: ReportMetadata = JSON.parse(content);
-
-    // Ensure hospital name is uppercase
-    if (metadata.hospitalName) {
-      metadata.hospitalName = metadata.hospitalName.toUpperCase();
-    }
-
-    console.log("=== PARSED VISION METADATA RESULT ===");
-    console.log(`Hospital: ${metadata.hospitalName}`);
-    console.log(`Date: ${metadata.reportDate}`);
-    console.log(`Passed: ${metadata.passed}`);
-    console.log("=== END PARSED VISION METADATA RESULT ===");
-
-    return metadata;
-  } catch (error) {
-    console.error("Error in vision metadata extraction:", error);
-    return {
-      hospitalName: null,
-      reportDate: null,
-      passed: false,
-    };
-  }
-}
 
 /**
  * Calculate fidelity score using Gemini 3
@@ -479,7 +185,7 @@ EXTRACTED METADATA:
 - Hospital Name: ${hospitalName || "Not extracted"}
 - Report Date: ${reportDate || "Not extracted"}
 
-Please analyze the image and extracted data to calculate a fidelity score. Do not deduct points for formatting issues or things being in lower case or upper case. Focus on the accuracy of the extracted values and metadata compared to the image.
+Please analyze the image and extracted data to calculate a fidelity score. Do not deduct points for formatting issues or things being in lower case or upper case. Focus on the accuracy of the extracted values and metadata compared to the image.- Set 'passed' to true if you are confident you extracted the data accurately
 `;
 
   // Get API keys
@@ -511,7 +217,8 @@ Please analyze the image and extracted data to calculate a fidelity score. Do no
 IMPORTANT: You must respond with a valid JSON object in the following format:
 {
   "fidelityScore": <number between 0.0 and 1.0>,
-  "explanation": "<brief explanation of the score>"
+  "explanation": "<brief explanation of the score>",
+  "passed": { type: "boolean" },
 }
 
 Do not include any other text or formatting. Just the JSON object.`;
@@ -592,6 +299,7 @@ Do not include any other text or formatting. Just the JSON object.`;
     fidelityScore: 0.0,
     explanation:
       "Failed to calculate fidelity score: All API keys were exhausted.",
+    passed: false,
   };
 }
 
@@ -600,12 +308,7 @@ Do not include any other text or formatting. Just the JSON object.`;
 // ============================================================================
 
 /**
- * Extract structured data from medical report using multi-stage AI pipeline
- *
- * New workflow:
- * 1. Extract test values from OCR text using Qwen
- * 2. Convert PDF to image (if needed) and extract/validate metadata using Qwen Vision
- * 3. Calculate fidelity score using Gemini
+ * Extract all structured data from medical report using Qwen Vision
  *
  * @param ocrText - OCR text extracted from the document
  * @param fileBase64 - Base64 encoded file (PDF or image)
@@ -620,36 +323,149 @@ export async function extractReportDataWithAI(
   console.log("=== STARTING MULTI-STAGE AI REPORT EXTRACTION ===");
 
   try {
-    // Step 1: Extract test values from OCR text
-    console.log("\n--- STEP 1: Extracting test values from OCR text ---");
-    const testValues = await extractTestValues(ocrText);
-
-    // Step 2: Prepare image input and extract/validate metadata with vision
-    console.log(
-      "\n--- STEP 2: Converting to image and extracting metadata with vision ---"
-    );
+    console.log("\n--- STEP 1: Processing file to image ---");
     const imageBase64 = await prepareImageInput(fileBase64, fileType);
-    const metadata = await extractMetadataWithVision(
-      imageBase64,
-      ocrText,
-      testValues
+
+    console.log("\n--- STEP 2: Extracting all data directly from image ---");
+
+    const TEST_VALUES_EXTRACTION_PROMPT = `You are an elite medical data extraction AI. You are provided with an image of a medical laboratory report.
+Your task is to accurately extract all test results into the required JSON format.
+
+### EXTRACTION INSTRUCTIONS:
+
+testValues (The Lab Results):
+- Extract EVERY test result listed in the document.
+- "key": The exact specific name of the test (e.g., "HEMOGLOBIN", "CHOLESTEROL", "TSH"). Do not include category headers (like "Biochemistry" or "CBC").
+- "value": The patient's exact result as a string (e.g., "5.4", "10.6 L", "<0.01", "Positive", "Negative"). It can be numeric, text, or a combination. Capture decimal points, operators (<, >), and any attached letters (like 'H' or 'L') accurately.
+- "unit": The unit of measurement (e.g., "mg/dL", "mmol/L", "%"). If no unit is present, return null.
+
+### STRICT RULES & COMMON MISTAKES TO AVOID:
+- RULE 1: NEVER extract the "Reference Range", "Normal Range", or "Biological Interval" as the test value. Only extract the patient's actual result.
+- RULE 2: ZERO HALLUCINATION. Do not guess, infer, or make up data. If it is not visible, use null.
+- RULE 3: Ignore patient names, doctor names, age, gender, addresses, and page numbers. Focus ONLY on diagnostic results.`;
+
+    const METADATA_EXTRACTION_PROMPT = `You are an elite medical data extraction AI. You are provided with an image of a medical laboratory report.
+Your task is to accurately extract the hospital name and report date into the required JSON format.
+
+### EXTRACTION INSTRUCTIONS:
+
+1. hospitalName:
+- Look at the top header or logo area for the laboratory, clinic, or hospital name.
+- Extract exactly as written. If completely missing, return null.
+
+2. reportDate:
+- Look for "Report Date", "Collected Date", "Result Date", or "Date".
+- CAUTION: DO NOT confuse this with the patient's Date of Birth (DOB).
+- You MUST normalize and convert the extracted date to strictly "YYYY-MM-DD" format (e.g., "12/31/2023" -> "2023-12-31", "05-Aug-2024" -> "2024-08-05").
+- If missing or unreadable, return null.`;
+
+    const testValuesResponse = await openRouter.chat.completions.create({
+      model: "cyankiwi/Qwen3.5-4B-AWQ-4bit",
+      temperature: 0,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image_url", image_url: { url: imageBase64 } },
+            { type: "text", text: TEST_VALUES_EXTRACTION_PROMPT },
+          ],
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "medical_test_values",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              testValues: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    key: { type: "string" },
+                    value: { type: "string" },
+                    unit: { type: ["string", "null"] },
+                  },
+                  required: ["key", "value", "unit"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["testValues"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const testValuesContent = testValuesResponse.choices[0]?.message?.content;
+    if (!testValuesContent)
+      throw new Error("No content in test values extraction fallback");
+    const extractedTestValuesData = JSON.parse(testValuesContent);
+
+    const metadataResponse = await openRouter.chat.completions.create({
+      model: "cyankiwi/Qwen3.5-4B-AWQ-4bit",
+      temperature: 0,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image_url", image_url: { url: imageBase64 } },
+            { type: "text", text: METADATA_EXTRACTION_PROMPT },
+          ],
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "medical_report_metadata",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              hospitalName: { type: ["string", "null"] },
+              reportDate: { type: ["string", "null"] },
+            },
+            required: ["hospitalName", "reportDate"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const metadataContent = metadataResponse.choices[0]?.message?.content;
+    if (!metadataContent)
+      throw new Error("No content in metadata extraction AI response");
+    const extractedMetadata = JSON.parse(metadataContent);
+
+    let finalHospitalName = extractedMetadata.hospitalName;
+    if (finalHospitalName) {
+      finalHospitalName = finalHospitalName.toUpperCase();
+    }
+    const testValues = (extractedTestValuesData.testValues || []).map(
+      (tv: ExtractedReportValue) => ({
+        key: tv.key.toUpperCase(),
+        value: tv.value,
+        unit: tv.unit ? tv.unit : null,
+      })
     );
 
-    // Step 3: Calculate fidelity score using Gemini
     console.log("\n--- STEP 3: Calculating fidelity score with Gemini ---");
     const fidelityResult = await calculateFidelityScore(
       imageBase64,
       ocrText,
       testValues,
-      metadata.hospitalName,
-      metadata.reportDate
+      finalHospitalName,
+      extractedMetadata.reportDate
     );
 
     const result: ExtractedReportData = {
-      hospitalName: metadata.hospitalName,
-      reportDate: metadata.reportDate,
+      hospitalName: finalHospitalName,
+      reportDate: extractedMetadata.reportDate,
       testValues: testValues,
-      passed: metadata.passed,
+      passed: fidelityResult.passed,
       fidelityScore: fidelityResult.fidelityScore,
       conclusion: fidelityResult.explanation,
     };

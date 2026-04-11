@@ -33,6 +33,14 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import {
     FileText,
     X,
     Loader2,
@@ -66,7 +74,7 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { uploadUserDocument, getMedicalReportDetails, getDocumentDetails, getUserDocuments, deleteDocument, PatientDataType, UploadUserDocumentResult } from "../../data/actions"
+import { uploadUserDocument, getMedicalReportDetails, getDocumentDetails, getUserDocuments, deleteDocument, deleteAllDocuments, PatientDataType, UploadUserDocumentResult } from "../../data/actions"
 
 interface UserDocument {
     id: string
@@ -199,6 +207,9 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
     const [isLoadingDocs, setIsLoadingDocs] = useState(false)
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(initialTotalPages)
+    const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false)
+    const [deleteAllConfirmationText, setDeleteAllConfirmationText] = useState("")
+    const [isDeletingAll, setIsDeletingAll] = useState(false)
     const [showUploadForm, setShowUploadForm] = useState(false)
     const [selectedDocument, setSelectedDocument] = useState<UserDocument | null>(null)
     const [documentDetails, setDocumentDetails] = useState<DocumentDetails | null>(null)
@@ -291,6 +302,28 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
         }
     }
 
+    const handleDeleteAllConfirm = async () => {
+        setIsDeletingAll(true)
+        try {
+            const result = await deleteAllDocuments(userId)
+            if (result.success) {
+                // Refresh the documents list
+                await fetchUserDocuments(1)
+                setCurrentPage(1)
+                // Reset the selected document
+                setSelectedDocument(null)
+                setDocumentDetails(null)
+                setMedicalReportDetails(null)
+            }
+        } catch (error) {
+            console.error("Error deleting all documents:", error)
+        } finally {
+            setIsDeletingAll(false)
+            setIsDeleteAllDialogOpen(false)
+            setDeleteAllConfirmationText("")
+        }
+    }
+
     const fileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader()
@@ -316,7 +349,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
             console.warn("Some files were skipped. Only PDF and image files are allowed.")
         }
 
-        const remainingSlots = 5 - files.length
+        const remainingSlots = 10 - files.length
 
         if (remainingSlots <= 0) {
             console.warn("Maximum of 5 files already reached.")
@@ -471,6 +504,12 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                         </p>
                     </div>
                     <div className="flex gap-2">
+                        <Button
+                            variant="destructive"
+                            onClick={() => setIsDeleteAllDialogOpen(true)}
+                        >
+                            Delete All
+                        </Button>
                         <Button variant="outline" onClick={() => fetchUserDocuments(currentPage)} disabled={isLoadingDocs}>
                             <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingDocs ? "animate-spin" : ""}`} />
                             Refresh
@@ -594,10 +633,10 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                     multiple={true}
                                     className="hidden"
                                     onChange={handleFileChange}
-                                    disabled={isLoading || files.length >= 5}
+                                    disabled={isLoading || files.length >= 10}
                                 />
 
-                                {files.length < 5 && (
+                                {files.length < 10 && (
                                     <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center hover:border-blue-500 dark:hover:border-blue-400 bg-slate-50/50 dark:bg-slate-800/30 transition-colors duration-200">
                                         <div className="space-y-3">
                                             <div className="mx-auto w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
@@ -615,7 +654,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                                 </label>
                                             </div>
                                             <p className="text-xs text-slate-500 dark:text-slate-400">
-                                                PDF and image files only, up to 10MB each • {5 - files.length} slot(s) remaining
+                                                PDF and image files only, up to 10MB each • {10 - files.length} slot(s) remaining
                                             </p>
                                         </div>
                                     </div>
@@ -655,7 +694,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                     </div>
                                 )}
 
-                                {files.length >= 5 && (
+                                {files.length >= 10 && (
                                     <p className="text-amber-600 dark:text-amber-400 text-sm flex items-center gap-1.5">
                                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400"></span>
                                         Maximum of 5 files reached
@@ -1169,6 +1208,58 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
+
+                {/* Delete All Documents Dialog */}
+                <Dialog open={isDeleteAllDialogOpen} onOpenChange={setIsDeleteAllDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Delete All Documents</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to delete ALL documents for {userName}? This action cannot be undone.
+                                <span className="block mt-2 text-orange-600 dark:text-orange-400">
+                                    This will also delete all associated medical report data, test values, and chunks.
+                                </span>
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <label htmlFor="delete-all-confirmation" className="text-sm font-medium">
+                                    Type <span className="font-mono bg-muted px-1.5 py-0.5 rounded">DELETE ALL</span> to confirm
+                                </label>
+                                <Input
+                                    id="delete-all-confirmation"
+                                    value={deleteAllConfirmationText}
+                                    onChange={(e) => setDeleteAllConfirmationText(e.target.value)}
+                                    placeholder="Type DELETE ALL to confirm"
+                                    disabled={isDeletingAll}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsDeleteAllDialogOpen(false)}
+                                disabled={isDeletingAll}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleDeleteAllConfirm}
+                                disabled={isDeletingAll || deleteAllConfirmationText !== "DELETE ALL"}
+                            >
+                                {isDeletingAll ? (
+                                    <span className="flex items-center gap-2">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Deleting...
+                                    </span>
+                                ) : (
+                                    "Delete All Documents"
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </>
     )

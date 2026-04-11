@@ -115,7 +115,10 @@ async function convertLinkToJpeg(url: string): Promise<string> {
       const jpegBuffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
       return `data:image/jpeg;base64,${jpegBuffer.toString("base64")}`;
     } catch (sharpError) {
-      console.warn("Sharp not available, returning original image as base64");
+      console.warn(
+        "Sharp not available, returning original image as base64",
+        sharpError
+      );
       return `data:${
         response.headers["content-type"] || "image/png"
       };base64,${buffer.toString("base64")}`;
@@ -154,27 +157,38 @@ async function pdfToTextWithZAI(
       requestBody.end_page_id = endPage;
     }
 
-    const response = await fetch(
-      "https://api.z.ai/api/paas/v4/layout_parsing",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: ZAI_API_KEY,
-        },
-        body: JSON.stringify(requestBody),
+    let response;
+    let data;
+    for (let attempts = 0; attempts <= 10; attempts++) {
+      try {
+        response = await fetch("https://api.z.ai/api/paas/v4/layout_parsing", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: ZAI_API_KEY,
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(
+            `Z.AI API returned status ${response.status}: ${errorText}`
+          );
+        }
+
+        data = await response.json();
+        break; // Success
+      } catch (err) {
+        if (attempts === 10) {
+          console.error(`Z.AI API failed after 10 retries.`);
+          throw err;
+        }
+        const delay = Math.floor(Math.random() * 3000) + 1000;
+        console.warn(`Z.AI API failed, retrying in ${delay}ms...`);
+        await new Promise((res) => setTimeout(res, delay));
       }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(
-        `Z.AI API returned status ${response.status}: ${errorText}`
-      );
-      return null;
     }
-
-    const data = await response.json();
     if (report) {
       console.log("Z.AI Report Parsing Response:", data.md_results);
       return data.md_results;
@@ -312,12 +326,27 @@ export async function pdfToText(
   const prompt = initialExtractionPrompt(startingPage);
   console.log(`Starting PDF extraction from page ${startingPage}.`);
 
-  const zaiResult = await pdfToTextWithZAI(true, pdfBase64, startingPage);
+  let zaiResult = null;
+  for (let attempts = 0; attempts < 10; attempts++) {
+    zaiResult = await pdfToTextWithZAI(true, pdfBase64, startingPage);
+    if (zaiResult) {
+      return zaiResult;
+    }
+    const delay = Math.floor(Math.random() * 9000) + 1000;
+    console.warn(
+      `Z.AI Layout Parsing returned null, retrying in ${delay}ms... (${
+        attempts + 1
+      }/10)`
+    );
+    await new Promise((res) => setTimeout(res, delay));
+  }
+
   if (zaiResult) {
     return zaiResult;
   }
+
   console.log(
-    "Z.AI Layout Parsing failed or unavailable, falling back to Gemini..."
+    "Z.AI Layout Parsing failed or unavailable after 10 retries, falling back to Gemini..."
   );
 
   console.log("Trying Gemini fallback with native PDF...");

@@ -8,6 +8,24 @@ import { extractReportDataWithAI } from "@/utils/reportExtractor";
 import cloudinary from "@/utils/cloudinary";
 import { clerkClient } from "@clerk/nextjs/server";
 import { Role } from "@/app/generated/prisma/enums";
+import { Pinecone } from "@pinecone-database/pinecone";
+
+// Initialize Pinecone
+let pc: Pinecone;
+let index: any;
+if (
+  process.env.PINECONE_API_KEY &&
+  process.env.PINECONE_INDEX_NAME &&
+  process.env.PINECONE_INDEX_HOST
+) {
+  pc = new Pinecone({
+    apiKey: process.env.PINECONE_API_KEY,
+  });
+  index = pc.index(
+    process.env.PINECONE_INDEX_NAME,
+    process.env.PINECONE_INDEX_HOST
+  );
+}
 
 export interface UploadUserDocumentResult {
   success: boolean;
@@ -31,6 +49,7 @@ export interface CreateUserResult {
 /**
  * Create a new user in both Clerk and the database
  */
+
 export async function createUser(
   username: string,
   email: string,
@@ -317,6 +336,29 @@ export async function uploadUserDocument(
           console.log(
             `Created report document record: ${document.id} for file ${file.name}`
           );
+
+          // Embed and store stringified report data in vector database (run in background)
+          embedAndStorePatientDocument(
+            document.id,
+            JSON.stringify(extractedData),
+            fileTitle,
+            verifiedUserId
+          )
+            .then((success) => {
+              if (success) {
+                console.log(
+                  `Successfully embedded medical report: ${document.id}`
+                );
+              } else {
+                console.error(`Failed to embed medical report: ${document.id}`);
+              }
+            })
+            .catch((error) => {
+              console.error(
+                `Error embedding medical report: ${document.id}`,
+                error
+              );
+            });
 
           // Upload the file to Cloudinary
           const mimeType =
@@ -693,6 +735,22 @@ export async function deleteDocument(documentId: string) {
       };
     }
 
+    if (index) {
+      try {
+        await Promise.all([
+          index.deleteMany({
+            documentId: { $eq: Number(documentId) },
+          }),
+          index.deleteMany({
+            documentId: { $eq: String(documentId) },
+          }),
+        ]);
+        console.log(`Deleted vector embeddings for documentId: ${documentId}`);
+      } catch (pineconeError) {
+        console.error("Failed to delete from Pinecone:", pineconeError);
+      }
+    }
+
     // Delete all associated data in the correct order due to foreign key constraints
 
     // 1. Delete medical report values (if any)
@@ -735,6 +793,78 @@ export async function deleteDocument(documentId: string) {
     return {
       success: false,
       message: "Failed to delete document.",
+    };
+  }
+}
+
+/**
+ * Delete all documents and their associated data for a specific user
+ */
+export async function deleteAllDocuments(userId: string) {
+  try {
+    if (index) {
+      try {
+        await Promise.all([
+          index.deleteMany({
+            patientId: { $eq: Number(userId) },
+          }),
+          index.deleteMany({
+            patientId: { $eq: String(userId) },
+          }),
+        ]);
+        console.log(`Deleted vector embeddings for patientId: ${userId}`);
+      } catch (pineconeError) {
+        console.error("Failed to delete from Pinecone:", pineconeError);
+      }
+    }
+
+    // We need to delete in the correct order to respect foreign key constraints
+    await prisma.medicalReportValue.deleteMany({
+      where: {
+        userId: userId,
+      },
+    });
+
+    await prisma.medicalReport.deleteMany({
+      where: {
+        document: {
+          userId: userId,
+        },
+      },
+    });
+
+    await prisma.ragChunk.deleteMany({
+      where: {
+        document: {
+          userId: userId,
+        },
+      },
+    });
+
+    await prisma.parentChunk.deleteMany({
+      where: {
+        document: {
+          userId: userId,
+        },
+      },
+    });
+
+    await prisma.document.deleteMany({
+      where: { userId },
+    });
+
+    revalidatePath("/dashboard/users/data");
+    revalidatePath(`/dashboard/users/${userId}/data`);
+
+    return {
+      success: true,
+      message: "All documents deleted successfully.",
+    };
+  } catch (error) {
+    console.error("Error deleting all documents:", error);
+    return {
+      success: false,
+      message: "Failed to delete documents.",
     };
   }
 }

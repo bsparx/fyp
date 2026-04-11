@@ -72,27 +72,42 @@ async function imageToTextWithZAI(
       file: `data:${mimeType};base64,${imageBase64}`,
     };
 
-    const response = await fetch(
-      "https://api.z.ai/api/paas/v4/layout_parsing",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: ZAI_API_KEY,
-        },
-        body: JSON.stringify(requestBody),
-      }
-    );
+    let response;
+    let data;
+    for (let attempts = 0; attempts < 10; attempts++) {
+      try {
+        response = await fetch("https://api.z.ai/api/paas/v4/layout_parsing", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: ZAI_API_KEY,
+          },
+          body: JSON.stringify(requestBody),
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(
-        `Z.AI API returned status ${response.status}: ${errorText}`
-      );
-      return null;
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(
+            `Z.AI API returned status ${response.status}: ${errorText}`
+          );
+        }
+
+        data = await response.json();
+        break; // Success
+      } catch (err) {
+        if (attempts === 9) {
+          console.error(`Z.AI API failed after 10 retries.`);
+          console.error(err instanceof Error ? err.message : String(err));
+        }
+        const delay = Math.floor(Math.random() * 9000) + 1000;
+        console.warn(`Z.AI API failed, retrying in ${delay}ms...`);
+        await new Promise((res) => setTimeout(res, delay));
+      }
     }
 
-    const data = await response.json();
+    if (!data) {
+      return null;
+    }
     if (report) {
       return data.md_results;
     }
