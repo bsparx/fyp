@@ -585,50 +585,6 @@ export async function getAllUsersWithDocumentCount() {
 }
 
 /**
- * Get documents for a specific user with pagination.
- */
-export async function getUserDocuments(
-  userId: string,
-  page: number = 1,
-  limit: number = 6
-) {
-  try {
-    const [documents, total] = await Promise.all([
-      prisma.document.findMany({
-        where: {
-          userId,
-          type: "PATIENT",
-        },
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.document.count({
-        where: {
-          userId,
-          type: "PATIENT",
-        },
-      }),
-    ]);
-
-    return {
-      documents,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
-    };
-  } catch (error) {
-    console.error("Error fetching user documents:", error);
-    return {
-      documents: [],
-      total: 0,
-      page,
-      totalPages: 0,
-    };
-  }
-}
-
-/**
  * Delete a user document.
  */
 export async function deleteUserDocument(
