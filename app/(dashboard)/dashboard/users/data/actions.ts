@@ -9,6 +9,12 @@ import cloudinary from "@/utils/cloudinary";
 import { clerkClient } from "@clerk/nextjs/server";
 import { Role } from "@/app/generated/prisma/enums";
 import { Pinecone } from "@pinecone-database/pinecone";
+import {
+  buildMedicalReportExtractedJson,
+  buildStructuredMetricRows,
+  parseExtractedReportDate,
+} from "@/utils/structuredReportIngestion";
+import { parseReportText } from "@/utils/reportParser";
 
 // Initialize Pinecone
 let pc: Pinecone;
@@ -146,6 +152,122 @@ interface FileData {
   base64: string;
   type: "pdf" | "image";
   name: string;
+}
+
+async function persistStructuredMedicalReport(args: {
+  documentId: string;
+  userId: string;
+  extractedText: string;
+  extractedData: Awaited<ReturnType<typeof extractReportDataWithAI>>;
+  reportDate: Date | null;
+  reportURL: string | null;
+}) {
+  const observedAt = args.reportDate ?? new Date();
+  const metricBuildResult = buildStructuredMetricRows(
+    args.extractedData.testValues,
+    args.userId,
+    observedAt
+  );
+
+  const medicalReport = await prisma.$transaction(async (tx) => {
+    const createdReport = await tx.medicalReport.create({
+      data: {
+        documentId: args.documentId,
+        userId: args.userId,
+        hospitalName: args.extractedData.hospitalName,
+        markdown: args.extractedText,
+        extractedJson: buildMedicalReportExtractedJson(
+          args.extractedData,
+          metricBuildResult
+        ),
+        reportDate: args.reportDate,
+        reportURL: args.reportURL,
+        passed: args.extractedData.passed,
+        fidelityScore: args.extractedData.fidelityScore,
+        conclusion: args.extractedData.conclusion,
+      },
+    });
+
+    if (metricBuildResult.rows.length > 0) {
+      await tx.medicalReportValue.createMany({
+        data: metricBuildResult.rows.map((row) => ({
+          ...row,
+          reportId: createdReport.id,
+        })),
+      });
+    }
+
+    return createdReport;
+  });
+
+  return {
+    medicalReport,
+    metricBuildResult,
+  };
+}
+
+function enrichExtractionWithTextFallback(
+  extractedData: Awaited<ReturnType<typeof extractReportDataWithAI>>,
+  extractedText: string
+): Awaited<ReturnType<typeof extractReportDataWithAI>> {
+  if (extractedData.testValues.length > 0) {
+    return extractedData;
+  }
+
+  const parsed = parseReportText(extractedText);
+  if (parsed.keyValues.length === 0) {
+    return extractedData;
+  }
+
+  return {
+    ...extractedData,
+    hospitalName: extractedData.hospitalName ?? parsed.hospitalName,
+    reportDate:
+      extractedData.reportDate ??
+      (parsed.reportDate ? parsed.reportDate.toISOString().split("T")[0] : null),
+    testValues: parsed.keyValues,
+    conclusion:
+      extractedData.conclusion ??
+      "Fallback parser extracted report values from OCR text.",
+  };
+}
+
+function canUploadToCloudinary(): boolean {
+  return Boolean(
+    process.env.CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET
+  );
+}
+
+async function uploadReportFileToCloudinary(args: {
+  dataUri: string;
+  fileType: "pdf" | "image";
+  userId: string;
+  documentId: string;
+}): Promise<string | null> {
+  if (!canUploadToCloudinary()) {
+    console.warn(
+      "Cloudinary environment variables are not fully configured. Skipping report upload."
+    );
+    return null;
+  }
+
+  try {
+    const uploadResult = await cloudinary.uploader.upload(args.dataUri, {
+      resource_type: args.fileType === "pdf" ? "raw" : "image",
+      folder: `medical_reports/${args.userId}`,
+      public_id: `report_${args.documentId}_${Date.now()}${
+        args.fileType === "pdf" ? ".pdf" : ""
+      }`,
+    });
+
+    console.log(`Uploaded file to Cloudinary: ${uploadResult.secure_url}`);
+    return uploadResult.secure_url;
+  } catch (error) {
+    console.error("Cloudinary upload failed. Continuing without reportURL.", error);
+    return null;
+  }
 }
 
 export type PatientDataType = "REPORT" | "COMMENT";
@@ -308,19 +430,15 @@ export async function uploadUserDocument(
             file.base64,
             fileType
           );
+          const enrichedExtractedData = enrichExtractionWithTextFallback(
+            extractedData,
+            extractedText
+          );
 
-          // Parse the report date if provided
-          let reportDate: Date | null = null;
-          if (extractedData.reportDate) {
-            try {
-              reportDate = new Date(extractedData.reportDate);
-              if (isNaN(reportDate.getTime())) {
-                reportDate = null;
-              }
-            } catch {
-              reportDate = null;
-            }
-          }
+          // Phase 1: Parse canonical report metadata for SQL storage.
+          const reportDate = parseExtractedReportDate(
+            enrichedExtractedData.reportDate
+          );
 
           const document = await prisma.document.create({
             data: {
@@ -337,10 +455,33 @@ export async function uploadUserDocument(
             `Created report document record: ${document.id} for file ${file.name}`
           );
 
+          // Upload the file to Cloudinary
+          const mimeType =
+            file.type === "pdf" ? "application/pdf" : "image/png";
+          const dataUri = `data:${mimeType};base64,${file.base64}`;
+
+          const reportURL = await uploadReportFileToCloudinary({
+            dataUri,
+            fileType,
+            userId: verifiedUserId,
+            documentId: document.id,
+          });
+
+          // Phase 2: Persist report envelope + structured metric rows in one transaction.
+          const { medicalReport, metricBuildResult } =
+            await persistStructuredMedicalReport({
+              documentId: document.id,
+              userId: verifiedUserId,
+              extractedText,
+              extractedData: enrichedExtractedData,
+              reportDate,
+              reportURL,
+            });
+
           // Embed and store stringified report data in vector database (run in background)
           embedAndStorePatientDocument(
             document.id,
-            JSON.stringify(extractedData),
+            JSON.stringify(enrichedExtractedData),
             fileTitle,
             verifiedUserId
           )
@@ -360,48 +501,8 @@ export async function uploadUserDocument(
               );
             });
 
-          // Upload the file to Cloudinary
-          const mimeType =
-            file.type === "pdf" ? "application/pdf" : "image/png";
-          const dataUri = `data:${mimeType};base64,${file.base64}`;
-
-          const uploadResult = await cloudinary.uploader.upload(dataUri, {
-            resource_type: file.type === "pdf" ? "raw" : "image",
-            folder: `medical_reports/${verifiedUserId}`,
-            public_id: `report_${document.id}_${Date.now()}${
-              file.type === "pdf" ? ".pdf" : ""
-            }`,
-          });
-
           console.log(
-            `Uploaded file to Cloudinary: ${uploadResult.secure_url}`
-          );
-
-          // Create medical report record with key-value pairs
-          const medicalReport = await prisma.medicalReport.create({
-            data: {
-              documentId: document.id,
-              userId: verifiedUserId,
-              hospitalName: extractedData.hospitalName,
-              markdown: extractedText,
-              reportDate: reportDate,
-              reportURL: uploadResult.secure_url,
-              passed: extractedData.passed,
-              fidelityScore: extractedData.fidelityScore,
-              conclusion: extractedData.conclusion,
-              reportValues: {
-                create: extractedData.testValues.map((tv) => ({
-                  key: tv.key,
-                  value: tv.value,
-                  unit: tv.unit,
-                  userId: verifiedUserId,
-                })),
-              },
-            },
-          });
-
-          console.log(
-            `Created medical report: ${medicalReport.id} with ${extractedData.testValues.length} values for file ${file.name}`
+            `Created medical report: ${medicalReport.id} with ${metricBuildResult.rows.length} values for file ${file.name} (numeric parsed: ${metricBuildResult.numericParsedCount}, alias mapped: ${metricBuildResult.aliasMappedCount}, composite expanded: ${metricBuildResult.compositeExpandedCount}, unmapped: ${metricBuildResult.unmappedMetricCount}, skipped: ${metricBuildResult.skippedCount})`
           );
 
           return { success: true, testValues: extractedData.testValues.length };
@@ -629,6 +730,16 @@ export async function getMedicalReportDetails(documentId: string) {
       return null;
     }
 
+    const extractedJson = medicalReport.extractedJson as
+      | Record<string, unknown>
+      | null;
+    const structuredIngestion =
+      extractedJson && typeof extractedJson === "object"
+        ? (extractedJson["structuredIngestion"] as
+            | Record<string, unknown>
+            | undefined)
+        : undefined;
+
     return {
       id: medicalReport.id,
       documentId: medicalReport.documentId,
@@ -640,11 +751,21 @@ export async function getMedicalReportDetails(documentId: string) {
       passed: medicalReport.passed,
       fidelityScore: medicalReport.fidelityScore,
       conclusion: medicalReport.conclusion,
+      dictionaryExpansion:
+        (structuredIngestion?.["dictionaryExpansion"] as
+          | Record<string, unknown>
+          | null
+          | undefined) ?? null,
       values: medicalReport.reportValues.map((v) => ({
         id: v.id,
         key: v.key,
         value: v.value,
         unit: v.unit,
+        keyNormalized: v.keyNormalized,
+        valueNumeric: v.valueNumeric,
+        unitNormalized: v.unitNormalized,
+        observedAt: v.observedAt?.toISOString() ?? null,
+        sequence: v.sequence,
       })),
     };
   } catch (error) {
