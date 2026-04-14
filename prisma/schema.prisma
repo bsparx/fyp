@@ -1,28 +1,256 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "../app/generated/prisma"
 }
 
-// prisma/schema.prisma
 datasource db {
-  provider  = "postgresql"
-  // uncomment next line if you use Prisma <5.10
-  // directUrl = env("DATABASE_URL_UNPOOLED")
+  provider = "postgresql"
 }
 
+model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  name                String?
+  role                Role                 @default(PATIENT)
+  clerkId             String               @unique
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  doctorProfile       DoctorProfile?
+  documents           Document[]
+  medicalReports      MedicalReport[]
+  medicalReportValues MedicalReportValue[]
+  NoteTemplate        NoteTemplate[]
+  patientProfile      PatientProfile?
+}
 
-// --------------------------------------
-// ENUMS
-// --------------------------------------
+model Document {
+  id              String           @id @default(cuid())
+  title           String
+  content         String
+  pdfUrl          String?
+  type            DocumentType     @default(RAG)
+  ragSubtype      RagSubtype?
+  patientDataType PatientDataType?
+  isIngested      Boolean          @default(false)
+  userId          String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User?            @relation(fields: [userId], references: [id])
+  medicalReports  MedicalReport[]
+  parentChunks    ParentChunk[]
+  ragChunks       RagChunk[]
+}
+
+model ParentChunk {
+  id          String     @id @default(cuid())
+  documentId  String
+  parentIndex Int
+  parentText  String
+  createdAt   DateTime   @default(now())
+  document    Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  ragChunks   RagChunk[]
+
+  @@unique([documentId, parentIndex])
+}
+
+model RagChunk {
+  id            String      @id @default(cuid())
+  documentId    String
+  parentChunkId String
+  chunkIndex    Int
+  chunkText     String
+  pineconeId    String      @unique
+  createdAt     DateTime    @default(now())
+  document      Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  parentChunk   ParentChunk @relation(fields: [parentChunkId], references: [id], onDelete: Cascade)
+}
+
+model MedicalReport {
+  id            String               @id @default(cuid())
+  documentId    String
+  markdown      String?
+  reportURL     String?
+  reportDate    DateTime?
+  hospitalName  String?
+  userId        String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  conclusion    String?
+  fidelityScore Float?
+  passed        Boolean?             @default(false)
+  extractedJson Json?
+  document      Document             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportValues  MedicalReportValue[]
+}
+
+model MedicalReportValue {
+  id             String        @id @default(cuid())
+  reportId       String
+  userId         String
+  key            String
+  value          String
+  unit           String?
+  createdAt      DateTime      @default(now())
+  keyNormalized  String?
+  observedAt     DateTime?
+  sequence       Int?
+  unitNormalized String?
+  valueNumeric   Float?
+  report         MedicalReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([key])
+  @@index([userId])
+  @@index([keyNormalized])
+  @@index([userId, keyNormalized])
+  @@index([userId, keyNormalized, observedAt])
+  @@index([reportId, keyNormalized])
+}
+
+model DoctorProfile {
+  id             String         @id @default(uuid())
+  userId         String         @unique
+  specialization String
+  appointments   Appointment[]
+  user           User           @relation(fields: [userId], references: [id])
+  prescriptions  Prescription[]
+}
+
+model PatientProfile {
+  id               String            @id @default(uuid())
+  userId           String            @unique
+  phone            String?
+  address          String?
+  aiSummary        String?
+  allergies        String?
+  bloodType        String?
+  conditions       String?
+  dateOfBirth      DateTime?
+  emergencyContact String?
+  gender           String?
+  height           String?
+  weight           String?
+  appointments     Appointment[]
+  healthMetrics    HealthMetric[]
+  notes            PatientNote[]
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminders        PatientReminder[]
+  prescriptions    Prescription[]
+}
+
+model Prescription {
+  id           String         @id @default(uuid())
+  name         String
+  dosage       String
+  frequency    String
+  startDate    DateTime
+  endDate      DateTime?
+  status       String         @default("ACTIVE")
+  prescribedBy String?
+  patientId    String
+  doctorId     String?
+  doctor       DoctorProfile? @relation(fields: [doctorId], references: [id])
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model HealthMetric {
+  id        String         @id @default(uuid())
+  type      String
+  value     String
+  unit      String?
+  trend     String?
+  status    String?
+  date      DateTime       @default(now())
+  patientId String
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model PatientNote {
+  id        String         @id @default(uuid())
+  title     String
+  content   String
+  tags      String?
+  date      DateTime       @default(now())
+  patientId String
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model PatientReminder {
+  id          String         @id @default(uuid())
+  text        String
+  date        DateTime       @default(now())
+  isCompleted Boolean        @default(false)
+  patientId   String
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id           String            @id @default(uuid())
+  date         DateTime
+  status       AppointmentStatus @default(PENDING)
+  reason       String?
+  doctorId     String?
+  patientId    String?
+  notes        String?
+  aiStatus     String?
+  createdAt    DateTime          @default(now())
+  recordingUrl String?
+  soapNote     Json?
+  soapNoteUrl  String?
+  transcript   Json?
+  updatedAt    DateTime          @updatedAt
+  doctor       DoctorProfile?    @relation(fields: [doctorId], references: [id])
+  patient      PatientProfile?   @relation(fields: [patientId], references: [id])
+}
+
+model NoteTemplate {
+  id                String              @id
+  slug              String?             @unique
+  name              String
+  description       String
+  source            NoteTemplateSource  @default(PERSONAL)
+  isActive          Boolean             @default(true)
+  headerFooterStyle HeaderFooterStyle   @default(DEFAULT)
+  headerTextAlign   HeaderTextAlign     @default(CENTER)
+  promptDirectives  String?
+  profileContext    Json
+  header            String
+  footer            String
+  normalization     Json?
+  userId            String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  User              User?               @relation(fields: [userId], references: [id])
+  NoteTemplateField NoteTemplateField[]
+
+  @@index([source])
+  @@index([userId, source])
+}
+
+model NoteTemplateField {
+  id             String                     @id
+  templateId     String
+  fieldOrder     Int
+  key            String
+  label          String
+  type           NoteTemplateFieldType      @default(STRING)
+  required       Boolean                    @default(false)
+  guidance       String?
+  hint           String?
+  fallbackPolicy NoteTemplateFallbackPolicy @default(EMPTY)
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime
+  NoteTemplate   NoteTemplate               @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, fieldOrder])
+  @@unique([templateId, key])
+  @@index([templateId, fieldOrder])
+}
 
 enum Role {
-  ADMIN   // Standardized from ADMIN/ADMINISTRATOR
+  ADMIN
   DOCTOR
   PATIENT
 }
@@ -42,265 +270,38 @@ enum PatientDataType {
   COMMENT
 }
 
-// --------------------------------------
-// CORE USER MODEL (Merged)
-// --------------------------------------
-
-model User {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  email     String   @unique
-  name      String?
-  role      Role     @default(PATIENT)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // --- Relations: RAG / Document System (Schema 1) ---
-  documents           Document[]
-  medicalReports      MedicalReport[]
-  medicalReportValues MedicalReportValue[]
-
-  // --- Relations: Hospital Management System (Schema 2) ---
-  doctorProfile       DoctorProfile?
-  patientProfile      PatientProfile?
+enum AppointmentStatus {
+  UNLINKED
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
 }
 
-// --------------------------------------
-// RAG & DOCUMENT SYSTEM (Schema 1)
-// --------------------------------------
-
-model Document {
-  id              String       @id @default(cuid())
-  title           String
-  content         String       @db.Text
-  pdfUrl          String?
-  type            DocumentType @default(RAG)
-  ragSubtype      RagSubtype?
-  patientDataType PatientDataType?
-  isIngested      Boolean      @default(false)
-  
-  // Relation to User
-  userId          String?
-  user            User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
-  // RAG document chunks stored in Pinecone
-  ragChunks       RagChunk[]
-  parentChunks    ParentChunk[]
-  medicalReports  MedicalReport[]
+enum HeaderFooterStyle {
+  DEFAULT
 }
 
-// Stores parent chunk text to avoid redundancy in Pinecone metadata
-model ParentChunk {
-  id              String   @id @default(cuid())
-  documentId      String
-  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  parentIndex     Int
-  parentText      String   @db.Text
-  
-  createdAt       DateTime @default(now())
-  
-  // All child chunks reference this parent
-  ragChunks       RagChunk[]
-  
-  @@unique([documentId, parentIndex])
+enum HeaderTextAlign {
+  LEFT
+  CENTER
+  RIGHT
 }
 
-model RagChunk {
-  id              String   @id @default(cuid())
-  documentId      String
-  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  
-  // Reference to parent chunk instead of storing parent text directly
-  parentChunkId   String
-  parentChunk     ParentChunk @relation(fields: [parentChunkId], references: [id], onDelete: Cascade)
-  
-  chunkIndex      Int
-  chunkText       String   @db.Text
-  pineconeId      String   @unique
-  
-  createdAt       DateTime @default(now())
+enum NoteTemplateFallbackPolicy {
+  EMPTY
+  NOT_DOCUMENTED
+  OMIT_IF_OPTIONAL
 }
 
-// Model for storing medical report key-value pairs
-model MedicalReport {
-  id              String   @id @default(cuid())
-  documentId      String
-  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  markdown        String?
-  reportURL       String?  // URL to the generated PDF report
-  // Report metadata
-  reportDate      DateTime?
-  hospitalName    String?
-  passed          Boolean? @default(false)  // Whether all test values are 100% correct
-  fidelityScore   Float?   // Fidelity score indicating pipeline accuracy
-  conclusion      String?  @db.Text         // AI explanation of why validation passed or failed
-  
-  // User relation
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  // Key-value pairs for the report
-  reportValues    MedicalReportValue[]
+enum NoteTemplateFieldType {
+  STRING
+  NUMBER
+  BOOLEAN
 }
 
-// Model for storing individual key-value pairs from medical reports
-model MedicalReportValue {
-  id              String   @id @default(cuid())
-  reportId        String
-  report          MedicalReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  
-  // User relation
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Key-value data (all uppercase for standardization)
-  key             String       // e.g., "VITAMIN D2"
-  value           String       // e.g., "1.15"
-  unit            String?      // e.g., "NG/ML"
-  
-  createdAt       DateTime @default(now())
-  
-  @@index([reportId])
-  @@index([key])
-  @@index([userId])
-}
-
-// --------------------------------------
-// HOSPITAL MANAGEMENT SYSTEM (Schema 2)
-// --------------------------------------
-
-// Doctor Schema
-model DoctorProfile {
-  id             String   @id @default(uuid())
-  userId         String   @unique
-  user           User     @relation(fields: [userId], references: [id])
-  specialization String
-  
-  appointments   Appointment[]
-  prescriptions  Prescription[]
-}
-
-// Patient Schema
-model PatientProfile {
-  id             String   @id @default(uuid())
-  userId         String   @unique
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Demographics
-  dateOfBirth    DateTime?
-  gender         String?
-  phone          String?
-  address        String?
-  emergencyContact String?
-
-  // Medical Stats
-  bloodType      String?
-  height         String? // Stored as string to match "5'11"" or "180cm" flexible for now
-  weight         String? // Stored as string "160 lbs"
-  
-  // Clinical Data
-  allergies      String? // Comma separated
-  conditions     String? // Comma separated chronic conditions
-  
-  // AI Summary
-  aiSummary      String?
-  
-  appointments   Appointment[]
-  prescriptions  Prescription[]
-  healthMetrics  HealthMetric[]
-  notes          PatientNote[]
-  reminders      PatientReminder[]
-}
-
-// Prescription
-model Prescription {
-  id          String   @id @default(uuid())
-  name        String
-  dosage      String
-  frequency   String
-  startDate   DateTime
-  endDate     DateTime?
-  status      String   @default("ACTIVE") // ACTIVE, COMPLETED, DISCONTINUED
-  prescribedBy String? // Doctor name fallback
-  
-  patientId   String
-  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  
-  doctorId    String?
-  doctor      DoctorProfile? @relation(fields: [doctorId], references: [id])
-}
-
-// Health Metrics for Trends (Manually added or device synced)
-model HealthMetric {
-  id          String   @id @default(uuid())
-  type        String   // "Blood Pressure", "Heart Rate", "Weight"
-  value       String   // "120/80", "72"
-  unit        String?  // "mmHg", "bpm"
-  trend       String?  // "up", "down", "stable"
-  status      String?  // "Normal", "Warning"
-  date        DateTime @default(now())
-  
-  patientId   String
-  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-}
-
-// Patient Note
-model PatientNote {
-  id        String   @id @default(uuid())
-  title     String
-  content   String
-  tags      String? // Comma separated tags
-  date      DateTime @default(now())
-  
-  patientId String
-  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-}
-
-// Patient Reminder
-model PatientReminder {
-  id        String   @id @default(uuid())
-  text      String
-  date      DateTime @default(now())
-  isCompleted Boolean @default(false)
-
-  patientId String
-  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-}
-
-// Appointment
-model Appointment {
-  id        String   @id @default(uuid())
-  date      DateTime
-  status    String   @default("PENDING") // PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED
-  reason    String?
-  notes     String?
-  
-  // Clinical Copilot Fields
-  recordingUrl   String?  // URL to stored audio file
-  transcript     Json?    // Structured transcript: [{ speaker: "doctor" | "patient", text: "...", timestamp: 0.5 }]
-  
-  // SOAP Notes - Storing as JSON allows flexibility 
-  soapNote       Json?    
-  
-  // Generated PDF
-  soapNoteUrl    String?  // URL to the generated PDF of the SOAP note
-
-  // Metadata for AI processing status
-  aiStatus       String?  // "PROCESSING", "COMPLETED", "FAILED"
-
-  doctorId  String?
-  doctor    DoctorProfile? @relation(fields: [doctorId], references: [id])
-  
-  patientId String
-  patient   PatientProfile @relation(fields: [patientId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum NoteTemplateSource {
+  LIBRARY
+  PERSONAL
 }
