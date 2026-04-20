@@ -2,7 +2,7 @@
 
 import prisma from "@/utils/db";
 import { revalidatePath } from "next/cache";
-import { processUserDataFiles } from "@/utils/userDataProcessing";
+import { processSingleUserDataFile } from "@/utils/userDataProcessing";
 import { embedAndStorePatientDocument } from "@/utils/embeddings";
 import { extractReportDataWithAI } from "@/utils/reportExtractor";
 import cloudinary from "@/utils/cloudinary";
@@ -356,7 +356,6 @@ export async function uploadUserDocument(
       index: number,
     ): Promise<{ success: boolean; testValues: number; error?: string }> => {
       const fileTitle = totalFiles === 1 ? title : `${title}-${index + 1}`;
-      const singleFileArray = [file];
 
       console.log(
         `Processing file ${index + 1}/${totalFiles}: ${
@@ -365,8 +364,8 @@ export async function uploadUserDocument(
       );
 
       try {
-        // Process this single file and extract text
-        const extractedText = await processUserDataFiles(singleFileArray);
+        // Parse each uploaded file independently so COMMENT uploads never merge.
+        const extractedText = await processSingleUserDataFile(file);
 
         if (!extractedText) {
           console.error(`Failed to extract text from file: ${file.name}`);
@@ -682,26 +681,29 @@ export async function getUserDocuments(
   limit: number = 6,
 ) {
   try {
-    const documentsPromise = prisma.document.findMany({
-      where: {
-        userId,
-        type: "PATIENT",
-      },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
-
-    const totalPromise = prisma.document.count({
-      where: {
-        userId,
-        type: "PATIENT",
-      },
-    });
+    const whereClause = {
+      userId,
+      type: "PATIENT" as const,
+    };
 
     const [documents, total] = await Promise.all([
-      documentsPromise,
-      totalPromise,
+      prisma.document.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          patientDataType: true,
+          createdAt: true,
+          isIngested: true,
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.document.count({
+        where: whereClause,
+      }),
     ]);
 
     return {
@@ -868,28 +870,25 @@ export async function getDocumentDetails(
   documentId: string,
 ): Promise<DocumentDetails | null> {
   try {
-    // Verify document exists
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
-      select: {
-        id: true,
-        content: true,
-      },
-    });
+    const [document, parentChunksCount, childChunksCount] = await Promise.all([
+      prisma.document.findUnique({
+        where: { id: documentId },
+        select: {
+          id: true,
+          content: true,
+        },
+      }),
+      prisma.parentChunk.count({
+        where: { documentId },
+      }),
+      prisma.ragChunk.count({
+        where: { documentId },
+      }),
+    ]);
 
     if (!document) {
       return null;
     }
-
-    // Get parent chunks count
-    const parentChunksCount = await prisma.parentChunk.count({
-      where: { documentId },
-    });
-
-    // Get child chunks count
-    const childChunksCount = await prisma.ragChunk.count({
-      where: { documentId },
-    });
 
     // Parse content to get files
     const files: Array<{ name: string; type: string; url: string }> = [];

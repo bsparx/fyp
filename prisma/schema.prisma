@@ -39,6 +39,8 @@ model Document {
   medicalReports  MedicalReport[]
   parentChunks    ParentChunk[]
   ragChunks       RagChunk[]
+
+  @@index([userId, type, createdAt(sort: Desc)])
 }
 
 model ParentChunk {

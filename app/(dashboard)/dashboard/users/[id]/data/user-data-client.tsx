@@ -89,7 +89,6 @@ interface UserDocument {
     type: string
     patientDataType: 'REPORT' | 'COMMENT' | null
     createdAt: string
-    content: string
     isIngested: boolean
 }
 

@@ -310,6 +310,27 @@ async function imageToText(
 }
 
 /**
+ * Process a single user data file (PDF or image) and extract text.
+ */
+export async function processSingleUserDataFile(file: {
+  base64: string;
+  type: "pdf" | "image";
+  name: string;
+}): Promise<string | null> {
+  console.log(`Processing single file: ${file.name} (${file.type})`);
+
+  if (file.type === "pdf") {
+    return await processPdfAndConvertToText([file.base64]);
+  }
+
+  if (file.type === "image") {
+    return await imageToText(file.base64, getMimeType(file.name));
+  }
+
+  return null;
+}
+
+/**
  * Process user data files (PDFs and images) and extract text.
  */
 export async function processUserDataFiles(
@@ -326,23 +347,9 @@ export async function processUserDataFiles(
     const textParts: string[] = [];
 
     for (const file of files) {
-      console.log(`Processing file: ${file.name} (${file.type})`);
-
-      if (file.type === "pdf") {
-        // Use PDF processing
-        const pdfText = await processPdfAndConvertToText([file.base64]);
-        if (pdfText) {
-          textParts.push(`## File: ${file.name}\n\n${pdfText}`);
-        }
-      } else if (file.type === "image") {
-        // Extract text from image
-        const imageText = await imageToText(
-          file.base64,
-          getMimeType(file.name),
-        );
-        if (imageText) {
-          textParts.push(`## File: ${file.name}\n\n${imageText}`);
-        }
+      const extractedText = await processSingleUserDataFile(file);
+      if (extractedText) {
+        textParts.push(`## File: ${file.name}\n\n${extractedText}`);
       }
     }
 
