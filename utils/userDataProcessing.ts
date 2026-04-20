@@ -57,7 +57,7 @@ BEGIN WORK AS SOON AS THE IMAGE IS SUPPLIED. OUTPUT ONLY THE EXTRACTED GFM.
 async function imageToTextWithZAI(
   report = false,
   imageBase64: string,
-  mimeType: string
+  mimeType: string,
 ): Promise<string | null> {
   if (!ZAI_API_KEY) {
     console.warn("ZAI_API_KEY is not set, skipping Z.AI Layout Parsing.");
@@ -88,7 +88,7 @@ async function imageToTextWithZAI(
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(
-            `Z.AI API returned status ${response.status}: ${errorText}`
+            `Z.AI API returned status ${response.status}: ${errorText}`,
           );
         }
 
@@ -196,7 +196,7 @@ async function imageToTextWithZAI(
                 });
 
                 console.log(
-                  `Successfully processed image with model: ${model}`
+                  `Successfully processed image with model: ${model}`,
                 );
                 break;
               } catch (error) {
@@ -207,7 +207,7 @@ async function imageToTextWithZAI(
 
             if (!result) {
               throw new Error(
-                `All models failed to process image. Last error: ${lastError}`
+                `All models failed to process image. Last error: ${lastError}`,
               );
             }
 
@@ -215,8 +215,8 @@ async function imageToTextWithZAI(
 
             return `\n\n<Image>\n<ImageDescription>${imageDescription}</ImageDescription>\n</Image>\n\n`;
           }
-        }
-      )
+        },
+      ),
     );
 
     const finalText = output.join("");
@@ -237,7 +237,7 @@ async function imageToTextWithZAI(
  */
 async function imageToText(
   imageBase64: string,
-  mimeType: string
+  mimeType: string,
 ): Promise<string | null> {
   // ── Primary: Z.AI Layout Parsing (glm-ocr) ──
   const zaiResult = await imageToTextWithZAI(true, imageBase64, mimeType);
@@ -245,7 +245,7 @@ async function imageToText(
     return zaiResult;
   }
   console.log(
-    "Z.AI Layout Parsing failed or unavailable, falling back to Gemini..."
+    "Z.AI Layout Parsing failed or unavailable, falling back to Gemini...",
   );
 
   // ── Fallback: Gemini Vision ──
@@ -268,13 +268,16 @@ async function imageToText(
     const apiKey = apiKeys[currentIndex];
 
     console.log(
-      `Attempting Gemini API call with key at index: ${currentIndex}`
+      `Attempting Gemini API call with key at index: ${currentIndex}`,
     );
 
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
         model: "gemini-3-flash-preview",
+        generationConfig: {
+          temperature: 0,
+        },
       });
 
       const result = await model.generateContent([prompt, fileDataPart]);
@@ -286,7 +289,7 @@ async function imageToText(
 
       if (text === undefined || text === null) {
         console.warn(
-          "Response text was undefined or null, returning empty content."
+          "Response text was undefined or null, returning empty content.",
         );
         return "";
       }
@@ -294,7 +297,7 @@ async function imageToText(
       return text;
     } catch (error) {
       console.error(
-        `FAILURE: Gemini API call with key at index ${currentIndex} failed.`
+        `FAILURE: Gemini API call with key at index ${currentIndex} failed.`,
       );
       if (error instanceof Error) {
         console.error("Error Message:", error.message);
@@ -310,7 +313,7 @@ async function imageToText(
  * Process user data files (PDFs and images) and extract text.
  */
 export async function processUserDataFiles(
-  files: Array<{ base64: string; type: "pdf" | "image"; name: string }>
+  files: Array<{ base64: string; type: "pdf" | "image"; name: string }>,
 ): Promise<string | null> {
   if (!files.length) {
     console.error("processUserDataFiles received no valid files.");
@@ -335,7 +338,7 @@ export async function processUserDataFiles(
         // Extract text from image
         const imageText = await imageToText(
           file.base64,
-          getMimeType(file.name)
+          getMimeType(file.name),
         );
         if (imageText) {
           textParts.push(`## File: ${file.name}\n\n${imageText}`);

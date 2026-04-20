@@ -6,6 +6,10 @@ import {
   embedAndStoreDocument,
   deleteDocumentVectors,
 } from "@/utils/embeddings";
+import {
+  deleteDocumentGraph,
+  syncDocumentGraphFromSql,
+} from "@/utils/graphRag";
 import { revalidatePath } from "next/cache";
 import type {
   DocumentType,
@@ -24,7 +28,7 @@ export interface UploadDocumentResult {
  * Converts PDFs to text, stores in database, and embeds in vector store.
  */
 export async function uploadDocument(
-  formData: FormData
+  formData: FormData,
 ): Promise<UploadDocumentResult> {
   try {
     const title = formData.get("title") as string;
@@ -80,6 +84,14 @@ export async function uploadDocument(
 
     console.log(`Created document record: ${document.id}`);
 
+    // Upsert document-level graph nodes/relationships immediately.
+    const graphSynced = await syncDocumentGraphFromSql(document.id);
+    if (!graphSynced) {
+      console.warn(
+        `Neo4j sync skipped/failed for uploaded document ${document.id}`,
+      );
+    }
+
     // Embed and store in Pinecone (run in background)
     embedAndStoreDocument(document.id, extractedText, title)
       .then((success) => {
@@ -117,11 +129,14 @@ export async function uploadDocument(
  * Delete a document and its associated vectors.
  */
 export async function deleteDocument(
-  documentId: string
+  documentId: string,
 ): Promise<UploadDocumentResult> {
   try {
     // Delete vectors from Pinecone
     await deleteDocumentVectors(documentId);
+
+    // Delete graph subgraph for this document.
+    await deleteDocumentGraph(documentId);
 
     // Delete document from database
     await prisma.document.delete({
@@ -215,7 +230,7 @@ export async function getDocument(documentId: string) {
  * Re-embed an existing document (useful after content updates).
  */
 export async function reembedDocument(
-  documentId: string
+  documentId: string,
 ): Promise<UploadDocumentResult> {
   try {
     const document = await prisma.document.findUnique({
@@ -233,8 +248,12 @@ export async function reembedDocument(
     const success = await embedAndStoreDocument(
       documentId,
       document.content,
-      document.title
+      document.title,
     );
+
+    if (success) {
+      await syncDocumentGraphFromSql(documentId);
+    }
 
     if (success) {
       return { success: true, message: "Document re-embedded successfully." };

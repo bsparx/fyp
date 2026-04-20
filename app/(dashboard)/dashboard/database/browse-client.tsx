@@ -1,7 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { FileText, Trash2, CheckCircle, XCircle, Search, MoreHorizontal, Pill, Activity } from "lucide-react";
+import {
+    FileText,
+    Trash2,
+    CheckCircle,
+    XCircle,
+    Search,
+    MoreHorizontal,
+    Pill,
+    Activity,
+    Network,
+    Loader2,
+} from "lucide-react";
 import {
     Card,
     CardContent,
@@ -29,7 +40,6 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
     DropdownMenu,
@@ -44,7 +54,27 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { deleteDocument, type DocumentWithStats } from "./actions";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+    deleteDocument,
+    getDocumentFullGraph,
+    getDomainFullGraph,
+    type DatabaseFullGraph,
+    type DocumentWithStats,
+} from "./actions";
 
 type TypeFilter = "ALL" | "MEDICINE" | "DISEASE";
 
@@ -57,6 +87,12 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
     const [searchQuery, setSearchQuery] = React.useState("");
     const [typeFilter, setTypeFilter] = React.useState<TypeFilter>("ALL");
     const [isDeleting, setIsDeleting] = React.useState<string | null>(null);
+    const [pendingDeleteDoc, setPendingDeleteDoc] = React.useState<DocumentWithStats | null>(null);
+    const [graphDialogOpen, setGraphDialogOpen] = React.useState(false);
+    const [graphTitle, setGraphTitle] = React.useState("Knowledge Graph");
+    const [graphData, setGraphData] = React.useState<DatabaseFullGraph | null>(null);
+    const [graphError, setGraphError] = React.useState<string | null>(null);
+    const [isGraphLoading, setIsGraphLoading] = React.useState(false);
 
     const filteredDocuments = React.useMemo(() => {
         let filtered = documents;
@@ -104,6 +140,51 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
         return text.substring(0, maxLength) + "...";
     };
 
+    const confirmDelete = async () => {
+        if (!pendingDeleteDoc) {
+            return;
+        }
+
+        await handleDelete(pendingDeleteDoc.id);
+        setPendingDeleteDoc(null);
+    };
+
+    const openDocumentGraph = async (doc: DocumentWithStats) => {
+        setGraphDialogOpen(true);
+        setGraphTitle(`Document Graph: ${doc.title}`);
+        setGraphData(null);
+        setGraphError(null);
+        setIsGraphLoading(true);
+
+        try {
+            const data = await getDocumentFullGraph(doc.id);
+            setGraphData(data);
+        } catch (error) {
+            console.error("Error loading document graph:", error);
+            setGraphError("Failed to load this document graph.");
+        } finally {
+            setIsGraphLoading(false);
+        }
+    };
+
+    const openDomainGraph = async (domain: "medicine" | "disease") => {
+        setGraphDialogOpen(true);
+        setGraphTitle(`Complete ${domain === "medicine" ? "Medicine" : "Disease"} Graph`);
+        setGraphData(null);
+        setGraphError(null);
+        setIsGraphLoading(true);
+
+        try {
+            const data = await getDomainFullGraph(domain);
+            setGraphData(data);
+        } catch (error) {
+            console.error(`Error loading ${domain} graph:`, error);
+            setGraphError(`Failed to load the ${domain} graph.`);
+        } finally {
+            setIsGraphLoading(false);
+        }
+    };
+
     return (
         <Card>
             <CardHeader>
@@ -115,6 +196,26 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                         </CardDescription>
                     </div>
                     <div className="flex items-center gap-3">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => void openDomainGraph("medicine")}
+                            disabled={isGraphLoading}
+                        >
+                            <Network className="h-3.5 w-3.5" />
+                            Medicine Graph
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => void openDomainGraph("disease")}
+                            disabled={isGraphLoading}
+                        >
+                            <Network className="h-3.5 w-3.5" />
+                            Disease Graph
+                        </Button>
                         <Select value={typeFilter} onValueChange={(value: TypeFilter) => setTypeFilter(value)}>
                             <SelectTrigger className="w-[140px]">
                                 <SelectValue placeholder="Filter by type" />
@@ -224,44 +325,35 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                                     </TableCell>
                                     <TableCell>{formatDate(doc.createdAt)}</TableCell>
                                     <TableCell>
-                                        <AlertDialog>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                        <span className="sr-only">Open menu</span>
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <AlertDialogTrigger asChild>
-                                                        <DropdownMenuItem className="text-destructive">
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            Delete
-                                                        </DropdownMenuItem>
-                                                    </AlertDialogTrigger>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                            <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>Delete Document</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                        Are you sure you want to delete &quot;{doc.title}&quot;? This will
-                                                        permanently remove the document and all its embeddings from the
-                                                        vector database.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                    <AlertDialogAction
-                                                        onClick={() => handleDelete(doc.id)}
-                                                        disabled={isDeleting === doc.id}
-                                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                                    >
-                                                        {isDeleting === doc.id ? "Deleting..." : "Delete"}
-                                                    </AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                        </AlertDialog>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                    <span className="sr-only">Open menu</span>
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem
+                                                    onSelect={(event) => {
+                                                        event.preventDefault();
+                                                        void openDocumentGraph(doc);
+                                                    }}
+                                                >
+                                                    <Network className="mr-2 h-4 w-4" />
+                                                    View Graph
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    className="text-destructive"
+                                                    onSelect={(event) => {
+                                                        event.preventDefault();
+                                                        setPendingDeleteDoc(doc);
+                                                    }}
+                                                >
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -269,6 +361,139 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                     </Table>
                 )}
             </CardContent>
+
+            <AlertDialog
+                open={pendingDeleteDoc !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setPendingDeleteDoc(null);
+                    }
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Document</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete &quot;{pendingDeleteDoc?.title}&quot;? This will permanently remove the
+                            document, SQL parent chunks, graph data, and embeddings from the vector database.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={Boolean(isDeleting)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDelete}
+                            disabled={!pendingDeleteDoc || isDeleting === pendingDeleteDoc.id}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {pendingDeleteDoc && isDeleting === pendingDeleteDoc.id ? "Deleting..." : "Delete"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <Dialog
+                open={graphDialogOpen}
+                onOpenChange={(open) => {
+                    setGraphDialogOpen(open);
+                    if (!open) {
+                        setGraphError(null);
+                    }
+                }}
+            >
+                <DialogContent className="max-h-[90vh] w-[95vw] max-w-6xl overflow-hidden">
+                    <DialogHeader>
+                        <DialogTitle>{graphTitle}</DialogTitle>
+                        <DialogDescription>
+                            Complete Neo4j graph view for this scope (all nodes and relationships currently connected).
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {isGraphLoading ? (
+                        <div className="flex min-h-[300px] items-center justify-center gap-2 text-muted-foreground">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            Loading graph...
+                        </div>
+                    ) : graphError ? (
+                        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+                            {graphError}
+                        </div>
+                    ) : !graphData ? (
+                        <div className="rounded-md border p-4 text-sm text-muted-foreground">
+                            Select a graph to view.
+                        </div>
+                    ) : !graphData.enabled ? (
+                        <div className="rounded-md border border-amber-400/40 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300">
+                            {graphData.message ?? "Neo4j is not configured in this environment."}
+                        </div>
+                    ) : !graphData.graphPresent ? (
+                        <div className="rounded-md border p-4 text-sm text-muted-foreground">
+                            {graphData.message ?? "No graph data found for this scope yet."}
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="flex flex-wrap gap-2">
+                                <Badge variant="outline">Nodes: {graphData.nodes.length}</Badge>
+                                <Badge variant="outline">Relationships: {graphData.edges.length}</Badge>
+                                {graphData.nodeTypeCounts.map((entry) => (
+                                    <Badge key={entry.type} variant="secondary">
+                                        {entry.type}: {entry.count}
+                                    </Badge>
+                                ))}
+                            </div>
+
+                            <Tabs defaultValue="nodes" className="w-full">
+                                <TabsList>
+                                    <TabsTrigger value="nodes">Nodes ({graphData.nodes.length})</TabsTrigger>
+                                    <TabsTrigger value="edges">Relationships ({graphData.edges.length})</TabsTrigger>
+                                </TabsList>
+
+                                <TabsContent value="nodes" className="mt-3">
+                                    <ScrollArea className="h-[55vh] rounded-md border p-3">
+                                        <div className="space-y-2">
+                                            {graphData.nodes.map((node) => (
+                                                <div key={node.id} className="rounded-md border bg-muted/20 p-3">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <p className="text-sm font-medium">{node.label}</p>
+                                                        <Badge variant="secondary">{node.type}</Badge>
+                                                    </div>
+                                                    <p className="mt-1 break-all text-xs text-muted-foreground">{node.id}</p>
+                                                    {Object.keys(node.properties).length > 0 && (
+                                                        <div className="mt-2 grid gap-1">
+                                                            {Object.entries(node.properties).map(([key, value]) => (
+                                                                <p key={`${node.id}-${key}`} className="break-all text-xs text-muted-foreground">
+                                                                    <span className="font-medium text-foreground/80">{key}:</span>{" "}
+                                                                    {value ?? "null"}
+                                                                </p>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                </TabsContent>
+
+                                <TabsContent value="edges" className="mt-3">
+                                    <ScrollArea className="h-[55vh] rounded-md border p-3">
+                                        <div className="space-y-2">
+                                            {graphData.edges.map((edge, index) => (
+                                                <div
+                                                    key={`${edge.source}-${edge.type}-${edge.target}-${index}`}
+                                                    className="rounded-md border bg-muted/20 p-3"
+                                                >
+                                                    <p className="break-all font-mono text-xs">
+                                                        {edge.source} -[{edge.type}]-&gt; {edge.target}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                </TabsContent>
+                            </Tabs>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </Card>
     );
 }

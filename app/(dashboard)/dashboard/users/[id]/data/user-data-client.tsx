@@ -70,7 +70,18 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { uploadUserDocument, getMedicalReportDetails, getDocumentDetails, getUserDocuments, deleteDocument, deleteAllDocuments, PatientDataType, UploadUserDocumentResult } from "../../data/actions"
+import {
+    uploadUserDocument,
+    getMedicalReportDetails,
+    getDocumentDetails,
+    getDocumentKnowledgeGraph,
+    getUserAverageFidelitySummary,
+    getUserDocuments,
+    deleteDocument,
+    deleteAllDocuments,
+    PatientDataType,
+    UploadUserDocumentResult,
+} from "../../data/actions"
 
 interface UserDocument {
     id: string
@@ -107,6 +118,31 @@ interface MedicalReportDetails {
     }>
 }
 
+interface DocumentKnowledgeGraphDetails {
+    enabled: boolean
+    documentPresent: boolean
+    summary: {
+        parentChunks: number
+        childChunks: number
+        reports: number
+        observations: number
+        metrics: number
+        totalNodes: number
+        totalEdges: number
+    }
+    sampleNodes: Array<{
+        id: string
+        type: string
+        label: string
+    }>
+    sampleEdges: Array<{
+        source: string
+        target: string
+        type: string
+    }>
+    message: string | null
+}
+
 interface FileItem {
     id: string
     file: File
@@ -115,17 +151,26 @@ interface FileItem {
     fileType: 'pdf' | 'image'
 }
 
+interface FidelitySummary {
+    averageFidelityScore: number | null
+    scoredReports: number
+    totalReports: number
+}
+
 interface UserDataClientProps {
     userId: string
     userName: string
     initialDocuments: UserDocument[]
     initialTotalPages: number
+    initialFidelitySummary: FidelitySummary
 }
 
 interface FormState {
     error: string | null
     success: string | null
 }
+
+const MAX_FILES = 10
 
 function SortableFileItem({
     item,
@@ -196,13 +241,14 @@ function SortableFileItem({
     )
 }
 
-export default function UserDataClient({ userId, userName, initialDocuments, initialTotalPages }: UserDataClientProps) {
+export default function UserDataClient({ userId, userName, initialDocuments, initialTotalPages, initialFidelitySummary }: UserDataClientProps) {
     const [files, setFiles] = useState<FileItem[]>([])
     const [dataType, setDataType] = useState<PatientDataType>("COMMENT")
     const [userDocuments, setUserDocuments] = useState<UserDocument[]>(initialDocuments)
     const [isLoadingDocs, setIsLoadingDocs] = useState(false)
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(initialTotalPages)
+    const [fidelitySummary, setFidelitySummary] = useState<FidelitySummary>(initialFidelitySummary)
     const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false)
     const [deleteAllConfirmationText, setDeleteAllConfirmationText] = useState("")
     const [isDeletingAll, setIsDeletingAll] = useState(false)
@@ -210,6 +256,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
     const [selectedDocument, setSelectedDocument] = useState<UserDocument | null>(null)
     const [documentDetails, setDocumentDetails] = useState<DocumentDetails | null>(null)
     const [medicalReportDetails, setMedicalReportDetails] = useState<MedicalReportDetails | null>(null)
+    const [knowledgeGraphDetails, setKnowledgeGraphDetails] = useState<DocumentKnowledgeGraphDetails | null>(null)
     const [isLoadingDetails, setIsLoadingDetails] = useState(false)
     const [reportViewMode, setReportViewMode] = useState<"keyvalue" | "markdown">("keyvalue")
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -226,12 +273,17 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
     const fetchUserDocuments = async (page: number = 1) => {
         setIsLoadingDocs(true)
         try {
-            const result = await getUserDocuments(userId, page)
-            setUserDocuments(result.documents.map(doc => ({
+            const [documentsResult, fidelityResult] = await Promise.all([
+                getUserDocuments(userId, page),
+                getUserAverageFidelitySummary(userId),
+            ])
+
+            setUserDocuments(documentsResult.documents.map(doc => ({
                 ...doc,
                 createdAt: doc.createdAt.toISOString(),
             })))
-            setTotalPages(result.totalPages)
+            setTotalPages(documentsResult.totalPages)
+            setFidelitySummary(fidelityResult)
         } catch (error) {
             console.error("Error fetching user documents:", error)
         } finally {
@@ -243,6 +295,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
         setIsLoadingDetails(true)
         setMedicalReportDetails(null)
         setDocumentDetails(null)
+        setKnowledgeGraphDetails(null)
         setReportViewMode("keyvalue")
 
         const doc = userDocuments.find(d => d.id === documentId)
@@ -251,13 +304,26 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
         try {
             if (doc?.patientDataType === 'REPORT') {
                 const reportDetails = await getMedicalReportDetails(documentId)
+
                 if (reportDetails) {
                     setMedicalReportDetails(reportDetails)
                 }
             } else {
-                const data = await getDocumentDetails(documentId)
+                const graphPromise = doc?.patientDataType === 'COMMENT'
+                    ? getDocumentKnowledgeGraph(documentId)
+                    : Promise.resolve(null)
+
+                const [data, graphDetails] = await Promise.all([
+                    getDocumentDetails(documentId),
+                    graphPromise,
+                ])
+
                 if (data) {
                     setDocumentDetails(data)
+                }
+
+                if (graphDetails) {
+                    setKnowledgeGraphDetails(graphDetails)
                 }
             }
         } catch (error) {
@@ -287,6 +353,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                     setSelectedDocument(null)
                     setDocumentDetails(null)
                     setMedicalReportDetails(null)
+                    setKnowledgeGraphDetails(null)
                 }
             }
         } catch (error) {
@@ -310,6 +377,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                 setSelectedDocument(null)
                 setDocumentDetails(null)
                 setMedicalReportDetails(null)
+                setKnowledgeGraphDetails(null)
             }
         } catch (error) {
             console.error("Error deleting all documents:", error)
@@ -345,17 +413,17 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
             console.warn("Some files were skipped. Only PDF and image files are allowed.")
         }
 
-        const remainingSlots = 10 - files.length
+        const remainingSlots = MAX_FILES - files.length
 
         if (remainingSlots <= 0) {
-            console.warn("Maximum of 5 files already reached.")
+            console.warn(`Maximum of ${MAX_FILES} files already reached.`)
             return
         }
 
         const filesToAdd = validFiles.slice(0, remainingSlots)
 
         if (validFiles.length > remainingSlots) {
-            console.warn(`Only the first ${remainingSlots} file(s) were added. Maximum is 5 files total.`)
+            console.warn(`Only the first ${remainingSlots} file(s) were added. Maximum is ${MAX_FILES} files total.`)
         }
 
         const newFileItems: FileItem[] = filesToAdd.map((file) => ({
@@ -459,6 +527,107 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
     })
 
     const isLoading = isPending
+    const averageFidelityPercent = fidelitySummary.averageFidelityScore !== null
+        ? `${(fidelitySummary.averageFidelityScore * 100).toFixed(1)}%`
+        : "N/A"
+    const averageFidelityColorClass = fidelitySummary.averageFidelityScore === null
+        ? "text-muted-foreground"
+        : fidelitySummary.averageFidelityScore >= 0.8
+            ? "text-green-600 dark:text-green-400"
+            : fidelitySummary.averageFidelityScore >= 0.6
+                ? "text-yellow-600 dark:text-yellow-400"
+                : fidelitySummary.averageFidelityScore >= 0.4
+                    ? "text-orange-600 dark:text-orange-400"
+                    : "text-red-600 dark:text-red-400"
+    const fidelityMetaText = fidelitySummary.totalReports === 0
+        ? "No medical reports uploaded yet"
+        : fidelitySummary.scoredReports === 0
+            ? `No scored reports yet (${fidelitySummary.totalReports} report(s) uploaded)`
+            : `${fidelitySummary.scoredReports}/${fidelitySummary.totalReports} report(s) with valid fidelity score`
+
+    const renderKnowledgeGraphSection = () => {
+        if (!knowledgeGraphDetails) {
+            return null
+        }
+
+        return (
+            <div className="space-y-3">
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                    Knowledge Graph
+                </h3>
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+                    {!knowledgeGraphDetails.enabled ? (
+                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                            {knowledgeGraphDetails.message ?? "Graph database is not configured."}
+                        </p>
+                    ) : !knowledgeGraphDetails.documentPresent ? (
+                        <p className="text-sm text-muted-foreground">
+                            {knowledgeGraphDetails.message ?? "This document is not present in the graph yet."}
+                        </p>
+                    ) : (
+                        <>
+                            <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+                                <div className="rounded-md border bg-background p-3">
+                                    <p className="text-xs text-muted-foreground">Total Nodes</p>
+                                    <p className="text-lg font-semibold">{knowledgeGraphDetails.summary.totalNodes}</p>
+                                </div>
+                                <div className="rounded-md border bg-background p-3">
+                                    <p className="text-xs text-muted-foreground">Total Edges</p>
+                                    <p className="text-lg font-semibold">{knowledgeGraphDetails.summary.totalEdges}</p>
+                                </div>
+                                <div className="rounded-md border bg-background p-3">
+                                    <p className="text-xs text-muted-foreground">Observations</p>
+                                    <p className="text-lg font-semibold">{knowledgeGraphDetails.summary.observations}</p>
+                                </div>
+                                <div className="rounded-md border bg-background p-3">
+                                    <p className="text-xs text-muted-foreground">Metrics</p>
+                                    <p className="text-lg font-semibold">{knowledgeGraphDetails.summary.metrics}</p>
+                                </div>
+                            </div>
+
+                            {knowledgeGraphDetails.sampleNodes.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                        Sample Nodes
+                                    </p>
+                                    <div className="space-y-2">
+                                        {knowledgeGraphDetails.sampleNodes.slice(0, 8).map((node) => (
+                                            <div key={node.id} className="rounded-md border bg-background p-2.5">
+                                                <p className="text-sm font-medium">{node.label}</p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                    {node.type} • {node.id}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {knowledgeGraphDetails.sampleEdges.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                        Sample Relationships
+                                    </p>
+                                    <div className="space-y-2">
+                                        {knowledgeGraphDetails.sampleEdges.slice(0, 8).map((edge, idx) => (
+                                            <div
+                                                key={`${edge.source}-${edge.type}-${edge.target}-${idx}`}
+                                                className="rounded-md border bg-background p-2.5"
+                                            >
+                                                <p className="text-sm font-mono break-all">
+                                                    {edge.source} -[{edge.type}]-&gt; {edge.target}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            </div>
+        )
+    }
 
     return (
         <>
@@ -514,6 +683,24 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                             <UploadCloud className="h-4 w-4 mr-2" />
                             {showUploadForm ? "Cancel" : "Add Documents"}
                         </Button>
+                    </div>
+                </div>
+
+                <div className="rounded-xl border bg-card shadow-sm p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Fidelity Overview
+                            </p>
+                            <h2 className="text-base font-semibold mt-1">Average Report Fidelity</h2>
+                            <p className="text-sm text-muted-foreground mt-1">{fidelityMetaText}</p>
+                        </div>
+                        <div className="text-left sm:text-right">
+                            <p className={`text-3xl font-bold tracking-tight ${averageFidelityColorClass}`}>
+                                {averageFidelityPercent}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">Across this patient&apos;s reports</p>
+                        </div>
                     </div>
                 </div>
 
@@ -614,10 +801,10 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                         htmlFor="fileInput"
                                         className="block text-sm font-medium text-slate-700 dark:text-slate-200"
                                     >
-                                        Upload Files (PDF & Images, up to 5)
+                                        Upload Files (PDF & Images, up to {MAX_FILES})
                                     </label>
                                     <span className="text-sm text-slate-500 dark:text-slate-400">
-                                        {files.length}/5 files
+                                        {files.length}/{MAX_FILES} files
                                     </span>
                                 </div>
 
@@ -629,10 +816,10 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                     multiple={true}
                                     className="hidden"
                                     onChange={handleFileChange}
-                                    disabled={isLoading || files.length >= 5}
+                                    disabled={isLoading || files.length >= MAX_FILES}
                                 />
 
-                                {files.length < 5 && (
+                                {files.length < MAX_FILES && (
                                     <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center hover:border-blue-500 dark:hover:border-blue-400 bg-slate-50/50 dark:bg-slate-800/30 transition-colors duration-200">
                                         <div className="space-y-3">
                                             <div className="mx-auto w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
@@ -650,7 +837,7 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                                 </label>
                                             </div>
                                             <p className="text-xs text-slate-500 dark:text-slate-400">
-                                                PDF and image files only, up to 10MB each • {5 - files.length} slot(s) remaining
+                                                PDF and image files only, up to 10MB each • {MAX_FILES - files.length} slot(s) remaining
                                             </p>
                                         </div>
                                     </div>
@@ -690,10 +877,10 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                     </div>
                                 )}
 
-                                {files.length >= 5 && (
+                                {files.length >= MAX_FILES && (
                                     <p className="text-amber-600 dark:text-amber-400 text-sm flex items-center gap-1.5">
                                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400"></span>
-                                        Maximum of 5 files reached
+                                        Maximum of {MAX_FILES} files reached
                                     </p>
                                 )}
                             </div>
@@ -1081,6 +1268,8 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                             )}
                                         </div>
                                     )}
+
+                                    {renderKnowledgeGraphSection()}
                                 </div>
                             ) : documentDetails ? (
                                 /* Comment/Embedding Details View */
@@ -1150,6 +1339,8 @@ export default function UserDataClient({ userId, userName, initialDocuments, ini
                                             ))}
                                         </div>
                                     </div>
+
+                                    {renderKnowledgeGraphSection()}
                                 </div>
                             ) : (
                                 <div className="text-center py-16 text-muted-foreground">

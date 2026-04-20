@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 
 const openRouter = new OpenAI({
   baseURL:
-    "https://muddasirjaved666--example-qwen3-5-4b-awq-inference-vllms-c9ebea.modal.run/v1",
+    "https://muddasirjaved666--example-qwen3-5-9b-awq-inference-vllms-f9f18b.modal.run/v1",
   apiKey: process.env.OPENROUTER_API_KEY || "",
 });
 
@@ -19,6 +19,7 @@ function getGeminiApiKeys(): string[] {
     process.env.GEMINI_API_KEY2,
     process.env.KeyForRoadmap_API_KEY,
     process.env.GEMINI_API_KEY3,
+    process.env.GEMINI_API_KEY4,
   ].filter((key): key is string => !!key);
 
   if (apiKeys.length === 0) {
@@ -115,7 +116,7 @@ async function convertPdfToImages(pdfBase64: string): Promise<string[]> {
  */
 async function prepareImageInput(
   fileBase64: string,
-  fileType: "pdf" | "image"
+  fileType: "pdf" | "image",
 ): Promise<string> {
   if (fileType === "image") {
     // If it's already an image, ensure it has the proper data URI prefix
@@ -164,7 +165,7 @@ async function calculateFidelityScore(
   imageBase64: string,
   testValues: ExtractedReportValue[],
   hospitalName: string | null,
-  reportDate: string | null
+  reportDate: string | null,
 ): Promise<FidelityScoreResult> {
   console.log("=== STARTING FIDELITY SCORE CALCULATION ===");
 
@@ -230,6 +231,9 @@ Do not include any other text or formatting. Just the JSON object.`;
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
         model: "gemini-3-flash-preview",
+        generationConfig: {
+          temperature: 0,
+        },
       });
 
       const result = await model.generateContent([jsonPrompt, imagePart]);
@@ -248,7 +252,7 @@ Do not include any other text or formatting. Just the JSON object.`;
       // Validate the result
       if (typeof fidelityResult.fidelityScore !== "number") {
         throw new Error(
-          `Invalid fidelityScore type: ${typeof fidelityResult.fidelityScore}`
+          `Invalid fidelityScore type: ${typeof fidelityResult.fidelityScore}`,
         );
       }
 
@@ -257,13 +261,13 @@ Do not include any other text or formatting. Just the JSON object.`;
       console.log(`Explanation: ${fidelityResult.explanation}`);
       console.log("=== END PARSED FIDELITY SCORE RESULT ===");
       console.log(
-        `SUCCESS: API call with key at index ${currentIndex} succeeded.`
+        `SUCCESS: API call with key at index ${currentIndex} succeeded.`,
       );
 
       return fidelityResult; // Success! Exit the loop and the function.
     } catch (error) {
       console.error(
-        `FAILURE: API call with key at index ${currentIndex} failed.`
+        `FAILURE: API call with key at index ${currentIndex} failed.`,
       );
       if (error instanceof Error) {
         console.error("Error Message:", error.message);
@@ -273,7 +277,7 @@ Do not include any other text or formatting. Just the JSON object.`;
           error.message.includes("RESOURCE_EXHAUSTED")
         ) {
           console.error(
-            `Reason: Rate limit likely exceeded for key index ${currentIndex}.`
+            `Reason: Rate limit likely exceeded for key index ${currentIndex}.`,
           );
         } else if (
           error.message.includes("400") &&
@@ -308,7 +312,7 @@ Do not include any other text or formatting. Just the JSON object.`;
  */
 async function fetchWithRetry<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 5
+  maxRetries: number = 5,
 ): Promise<T> {
   let attempt = 0;
   while (attempt < maxRetries) {
@@ -323,7 +327,7 @@ async function fetchWithRetry<T>(
       console.log(
         `API call failed. Retrying in ${timeoutSec}s... (Attempt ${
           attempt + 1
-        }/${maxRetries})`
+        }/${maxRetries})`,
       );
       await new Promise((resolve) => setTimeout(resolve, timeoutSec * 1000));
     }
@@ -342,7 +346,7 @@ async function fetchWithRetry<T>(
 export async function extractReportDataWithAI(
   ocrText: string,
   fileBase64: string,
-  fileType: "pdf" | "image"
+  fileType: "pdf" | "image",
 ): Promise<ExtractedReportData> {
   console.log("=== STARTING MULTI-STAGE AI REPORT EXTRACTION ===");
 
@@ -359,7 +363,7 @@ Your primary directive is EXHAUSTIVE EXTRACTION. You must accurately extract eve
 Process the document systematically, line-by-line, top-to-bottom, left-to-right. For every diagnostic test found, extract the following into the "testValues" array:
 
 1. "key": The specific name of the test (e.g., "HEMOGLOBIN", "CHOLESTEROL", "TSH", "Neutrophils"). 
-   - Capture the exact name.
+   - Capture the exact name. Be really careful not to have a typo in the key name.
    - Do NOT include overarching category headers (like "Biochemistry" or "Complete Blood Count").
 
 2. "value": The patient's exact recorded result as a string.
@@ -374,6 +378,7 @@ Process the document systematically, line-by-line, top-to-bottom, left-to-right.
 - RULE 2: AVOID REFERENCE RANGES. Never extract the "Reference Range", "Normal Range", or "Biological Interval" as the test value. Visually distinguish the "Result" column from the "Reference" column.
 - RULE 3: ZERO HALLUCINATION. Do not guess, infer, calculate, or make up data. Extract only what is visibly printed. If a value is unreadable, skip it.
 - RULE 4: IGNORE NON-TEST DATA. Ignore patient names, doctor names, demographics, clinic addresses, barcodes, and page numbers. Focus strictly on the diagnostic test line items.
+- RULE 5: ZERO TYPOS / FATAL STAKES. You must be really careful not to have a typo in the key name, and the entire extraction must be absolutely typo and error-free. Treat this with extreme caution: the life of the patient depends on it.
 
 ### REQUIRED JSON OUTPUT FORMAT:
 You must return ONLY valid, well-formed JSON matching the following structure. Do not wrap the JSON in markdown code blocks or add any conversational text.
@@ -405,7 +410,7 @@ Your task is to accurately extract the hospital name and report date into the re
 
     const testValuesResponse = await fetchWithRetry(() =>
       openRouter.chat.completions.create({
-        model: "cyankiwi/Qwen3.5-4B-AWQ-4bit",
+        model: "cyankiwi/Qwen3.5-9B-AWQ-4bit",
         temperature: 0,
         messages: [
           {
@@ -443,7 +448,7 @@ Your task is to accurately extract the hospital name and report date into the re
             },
           },
         },
-      })
+      }),
     );
 
     const testValuesContent = testValuesResponse.choices[0]?.message?.content;
@@ -453,7 +458,7 @@ Your task is to accurately extract the hospital name and report date into the re
 
     const metadataResponse = await fetchWithRetry(() =>
       openRouter.chat.completions.create({
-        model: "cyankiwi/Qwen3.5-4B-AWQ-4bit",
+        model: "cyankiwi/Qwen3.5-9B-AWQ-4bit",
         temperature: 0,
         messages: [
           {
@@ -480,7 +485,7 @@ Your task is to accurately extract the hospital name and report date into the re
             },
           },
         },
-      })
+      }),
     );
 
     const metadataContent = metadataResponse.choices[0]?.message?.content;
@@ -497,7 +502,7 @@ Your task is to accurately extract the hospital name and report date into the re
         key: tv.key.toUpperCase(),
         value: tv.value,
         unit: tv.unit ? tv.unit : null,
-      })
+      }),
     );
 
     console.log("\n--- STEP 3: Calculating fidelity score with Gemini ---");
@@ -505,7 +510,7 @@ Your task is to accurately extract the hospital name and report date into the re
       imageBase64,
       testValues,
       finalHospitalName,
-      extractedMetadata.reportDate
+      extractedMetadata.reportDate,
     );
 
     const result: ExtractedReportData = {

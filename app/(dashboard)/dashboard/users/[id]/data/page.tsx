@@ -1,4 +1,4 @@
-import { getUserById, getUserDocuments } from "../../data/actions"
+import { getUserAverageFidelitySummary, getUserById, getUserDocuments } from "../../data/actions"
 import UserDataClient from "./user-data-client"
 
 export default async function UserDataPage({ params }: { params: Promise<{ id: string }> }) {
@@ -6,9 +6,10 @@ export default async function UserDataPage({ params }: { params: Promise<{ id: s
     const userId = resolvedParams.id
 
     // Fetch user details and documents in parallel
-    const [user, documentsData] = await Promise.all([
+    const [user, documentsData, fidelitySummary] = await Promise.all([
         getUserById(userId),
         getUserDocuments(userId, 1),
+        getUserAverageFidelitySummary(userId),
     ])
 
     if (!user) {
@@ -30,6 +31,7 @@ export default async function UserDataPage({ params }: { params: Promise<{ id: s
                 createdAt: doc.createdAt.toISOString(),
             }))}
             initialTotalPages={documentsData.totalPages}
+            initialFidelitySummary={fidelitySummary}
         />
     )
 }

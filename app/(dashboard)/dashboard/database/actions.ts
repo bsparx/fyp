@@ -7,6 +7,13 @@ import {
   getParentTexts,
   rerankDocuments,
 } from "@/utils/embeddings";
+import {
+  deleteDocumentGraph,
+  getFullDocumentGraphFromNeo4j,
+  getFullDomainGraphFromNeo4j,
+  searchGraphContextInNeo4j,
+  type FullGraphPayload,
+} from "@/utils/graphRag";
 import { revalidatePath } from "next/cache";
 
 export interface DocumentWithStats {
@@ -53,6 +60,321 @@ export interface ParentSearchResult {
   score: number;
 }
 
+export interface HybridGraphNode {
+  id: string;
+  type: string;
+  label: string;
+  properties: Record<string, string | null>;
+}
+
+export interface HybridGraphEdge {
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface HybridGraphEvidence {
+  id: string;
+  patientId: string;
+  patientName: string | null;
+  reportId: string;
+  documentTitle: string | null;
+  reportDate: string | null;
+  hospitalName: string | null;
+  key: string;
+  keyNormalized: string | null;
+  value: string;
+  unit: string | null;
+  observedAt: string | null;
+}
+
+export interface HybridGraphContext {
+  queryTerms: string[];
+  nodes: HybridGraphNode[];
+  edges: HybridGraphEdge[];
+  evidence: HybridGraphEvidence[];
+  stats: {
+    patients: number;
+    reports: number;
+    observations: number;
+    metrics: number;
+    totalNodes: number;
+    totalEdges: number;
+  };
+}
+
+export interface HybridSearchResult {
+  vectorResults: ParentSearchResult[];
+  graphContext: HybridGraphContext;
+}
+
+export type DatabaseFullGraph = FullGraphPayload;
+
+const EMPTY_HYBRID_GRAPH_CONTEXT: HybridGraphContext = {
+  queryTerms: [],
+  nodes: [],
+  edges: [],
+  evidence: [],
+  stats: {
+    patients: 0,
+    reports: 0,
+    observations: 0,
+    metrics: 0,
+    totalNodes: 0,
+    totalEdges: 0,
+  },
+};
+
+function extractQueryTerms(query: string): string[] {
+  const stopWords = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "from",
+    "that",
+    "this",
+    "are",
+    "was",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "show",
+    "over",
+    "last",
+    "about",
+    "into",
+    "have",
+    "has",
+    "had",
+    "patient",
+    "report",
+  ]);
+
+  return Array.from(
+    new Set(
+      query
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .map((term) => term.trim())
+        .filter((term) => term.length >= 3 && !stopWords.has(term)),
+    ),
+  ).slice(0, 6);
+}
+
+function toIso(value: Date | null | undefined): string | null {
+  return value ? value.toISOString() : null;
+}
+
+function toMetricSlug(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return slug || "unknown_metric";
+}
+
+async function buildPrivateGraphContext(
+  query: string,
+  maxRows: number = 60,
+): Promise<HybridGraphContext> {
+  try {
+    const queryTerms = extractQueryTerms(query);
+
+    const rows = await prisma.medicalReportValue.findMany({
+      where:
+        queryTerms.length > 0
+          ? {
+              OR: queryTerms.flatMap((term) => [
+                { key: { contains: term, mode: "insensitive" } },
+                { keyNormalized: { contains: term, mode: "insensitive" } },
+                { value: { contains: term, mode: "insensitive" } },
+                {
+                  report: {
+                    hospitalName: { contains: term, mode: "insensitive" },
+                  },
+                },
+                {
+                  report: {
+                    user: {
+                      OR: [
+                        { name: { contains: term, mode: "insensitive" } },
+                        { email: { contains: term, mode: "insensitive" } },
+                      ],
+                    },
+                  },
+                },
+              ]),
+            }
+          : undefined,
+      include: {
+        report: {
+          select: {
+            id: true,
+            reportDate: true,
+            hospitalName: true,
+            document: {
+              select: {
+                title: true,
+              },
+            },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ observedAt: "desc" }, { createdAt: "desc" }],
+      take: maxRows,
+    });
+
+    const nodeMap = new Map<string, HybridGraphNode>();
+    const edgeMap = new Map<string, HybridGraphEdge>();
+    const evidence: HybridGraphEvidence[] = [];
+
+    for (const row of rows) {
+      const patientNodeId = `patient:${row.report.user.id}`;
+      const reportNodeId = `report:${row.reportId}`;
+      const observationNodeId = `observation:${row.id}`;
+      const metricSlug = toMetricSlug(row.keyNormalized ?? row.key);
+      const metricNodeId = `metric:${metricSlug}`;
+
+      const patientLabel = row.report.user.name ?? row.report.user.email;
+      const reportLabel =
+        row.report.document?.title ??
+        row.report.hospitalName ??
+        `Report ${row.report.id}`;
+      const observationLabel = `${row.key}: ${row.value}${
+        row.unit ? ` ${row.unit}` : ""
+      }`;
+
+      if (!nodeMap.has(patientNodeId)) {
+        nodeMap.set(patientNodeId, {
+          id: patientNodeId,
+          type: "Patient",
+          label: patientLabel,
+          properties: {
+            patientId: row.report.user.id,
+            name: row.report.user.name,
+            email: row.report.user.email,
+          },
+        });
+      }
+
+      if (!nodeMap.has(reportNodeId)) {
+        nodeMap.set(reportNodeId, {
+          id: reportNodeId,
+          type: "Report",
+          label: reportLabel,
+          properties: {
+            reportId: row.report.id,
+            reportDate: toIso(row.report.reportDate),
+            hospitalName: row.report.hospitalName,
+          },
+        });
+      }
+
+      if (!nodeMap.has(observationNodeId)) {
+        nodeMap.set(observationNodeId, {
+          id: observationNodeId,
+          type: "Observation",
+          label: observationLabel,
+          properties: {
+            key: row.key,
+            value: row.value,
+            unit: row.unit,
+            observedAt: toIso(row.observedAt),
+          },
+        });
+      }
+
+      if (!nodeMap.has(metricNodeId)) {
+        nodeMap.set(metricNodeId, {
+          id: metricNodeId,
+          type: "Metric",
+          label: row.keyNormalized ?? row.key,
+          properties: {
+            key: row.key,
+            keyNormalized: row.keyNormalized,
+          },
+        });
+      }
+
+      const hasReportKey = `${patientNodeId}|HAS_REPORT|${reportNodeId}`;
+      const hasObservationKey = `${reportNodeId}|HAS_OBSERVATION|${observationNodeId}`;
+      const ofMetricKey = `${observationNodeId}|OF_METRIC|${metricNodeId}`;
+
+      if (!edgeMap.has(hasReportKey)) {
+        edgeMap.set(hasReportKey, {
+          source: patientNodeId,
+          target: reportNodeId,
+          type: "HAS_REPORT",
+        });
+      }
+
+      if (!edgeMap.has(hasObservationKey)) {
+        edgeMap.set(hasObservationKey, {
+          source: reportNodeId,
+          target: observationNodeId,
+          type: "HAS_OBSERVATION",
+        });
+      }
+
+      if (!edgeMap.has(ofMetricKey)) {
+        edgeMap.set(ofMetricKey, {
+          source: observationNodeId,
+          target: metricNodeId,
+          type: "OF_METRIC",
+        });
+      }
+
+      evidence.push({
+        id: row.id,
+        patientId: row.report.user.id,
+        patientName: row.report.user.name,
+        reportId: row.report.id,
+        documentTitle: row.report.document?.title ?? null,
+        reportDate: toIso(row.report.reportDate),
+        hospitalName: row.report.hospitalName,
+        key: row.key,
+        keyNormalized: row.keyNormalized,
+        value: row.value,
+        unit: row.unit,
+        observedAt: toIso(row.observedAt),
+      });
+    }
+
+    const nodes = Array.from(nodeMap.values());
+    const edges = Array.from(edgeMap.values());
+
+    const stats = {
+      patients: nodes.filter((n) => n.type === "Patient").length,
+      reports: nodes.filter((n) => n.type === "Report").length,
+      observations: nodes.filter((n) => n.type === "Observation").length,
+      metrics: nodes.filter((n) => n.type === "Metric").length,
+      totalNodes: nodes.length,
+      totalEdges: edges.length,
+    };
+
+    return {
+      queryTerms,
+      nodes: nodes.slice(0, 200),
+      edges: edges.slice(0, 300),
+      evidence: evidence.slice(0, 30),
+      stats,
+    };
+  } catch (error) {
+    console.error("Error building private graph context:", error);
+    return EMPTY_HYBRID_GRAPH_CONTEXT;
+  }
+}
+
 /**
  * Get all documents with their chunk counts
  */
@@ -77,19 +399,43 @@ export async function getDocuments(): Promise<DocumentWithStats[]> {
   return documents;
 }
 
+export async function getDocumentFullGraph(
+  documentId: string,
+): Promise<DatabaseFullGraph> {
+  return getFullDocumentGraphFromNeo4j(documentId);
+}
+
+export async function getDomainFullGraph(
+  domain: "medicine" | "disease",
+): Promise<DatabaseFullGraph> {
+  return getFullDomainGraphFromNeo4j(domain);
+}
+
 /**
  * Delete a document and all its vectors
  */
 export async function deleteDocument(
-  documentId: string
+  documentId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // First delete vectors from Pinecone
-    await deleteDocumentVectors(documentId);
+    // First delete vectors from Pinecone.
+    const vectorsDeleted = await deleteDocumentVectors(documentId);
+    if (!vectorsDeleted) {
+      return { success: false, error: "Failed to delete document embeddings" };
+    }
 
-    // Then delete the document from database
-    await prisma.document.delete({
-      where: { id: documentId },
+    // Delete graph subgraph for this document.
+    await deleteDocumentGraph(documentId);
+
+    // Remove SQL source records (parent chunks + document).
+    await prisma.$transaction(async (tx) => {
+      await tx.parentChunk.deleteMany({
+        where: { documentId },
+      });
+
+      await tx.document.delete({
+        where: { id: documentId },
+      });
     });
 
     revalidatePath("/dashboard/database");
@@ -133,7 +479,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     const date = item.createdAt.toISOString().split("T")[0];
     documentsPerDayMap.set(
       date,
-      (documentsPerDayMap.get(date) || 0) + item._count.id
+      (documentsPerDayMap.get(date) || 0) + item._count.id,
     );
   });
 
@@ -141,7 +487,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     ([date, count]) => ({
       date,
       count,
-    })
+    }),
   );
 
   // Get chunks per document (top 10)
@@ -211,7 +557,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
 export async function searchVectorDatabase(
   query: string,
   topK: number = 50,
-  typeFilter: "medicine" | "disease" | "all" = "all"
+  typeFilter: "medicine" | "disease" | "all" = "all",
 ): Promise<ParentSearchResult[]> {
   if (!query.trim()) {
     return [];
@@ -336,5 +682,43 @@ export async function searchVectorDatabase(
   } catch (error) {
     console.error("Error searching vector database:", error);
     return [];
+  }
+}
+
+/**
+ * Hybrid search for admin use-cases.
+ * Combines vector retrieval with a private graph context built from structured report data.
+ */
+export async function searchHybridDatabase(
+  query: string,
+  topK: number = 50,
+  typeFilter: "medicine" | "disease" | "all" = "all",
+): Promise<HybridSearchResult> {
+  if (!query.trim()) {
+    return {
+      vectorResults: [],
+      graphContext: EMPTY_HYBRID_GRAPH_CONTEXT,
+    };
+  }
+
+  try {
+    const [vectorResults, neo4jGraphContext] = await Promise.all([
+      searchVectorDatabase(query, topK, typeFilter),
+      searchGraphContextInNeo4j(query),
+    ]);
+
+    const graphContext =
+      neo4jGraphContext ?? (await buildPrivateGraphContext(query));
+
+    return {
+      vectorResults,
+      graphContext,
+    };
+  } catch (error) {
+    console.error("Error performing hybrid search:", error);
+    return {
+      vectorResults: [],
+      graphContext: EMPTY_HYBRID_GRAPH_CONTEXT,
+    };
   }
 }

@@ -5,9 +5,9 @@ export default function SearchPage() {
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Vector Search</h1>
+                    <h1 className="text-2xl font-bold tracking-tight">Hybrid Search</h1>
                     <p className="text-muted-foreground">
-                        Search the vector database using semantic similarity
+                        Search vector data and private graph context from ingested reports
                     </p>
                 </div>
             </div>

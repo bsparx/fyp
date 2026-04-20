@@ -31,7 +31,7 @@ if (!process.env.PINECONE_INDEX_NAME) {
 
 const index = pc.index(
   process.env.PINECONE_INDEX_NAME,
-  process.env.PINECONE_INDEX_HOST
+  process.env.PINECONE_INDEX_HOST,
 );
 
 /**
@@ -42,7 +42,7 @@ const index = pc.index(
 export async function embedAndStoreDocument(
   documentId: string,
   content: string,
-  documentTitle: string
+  documentTitle: string,
 ): Promise<boolean> {
   try {
     // Check if document is already ingested and get ragSubtype
@@ -65,7 +65,7 @@ export async function embedAndStoreDocument(
     }
 
     console.log(
-      `Processing ${parentChunks.length} parent chunks for document: ${documentTitle}`
+      `Processing ${parentChunks.length} parent chunks for document: ${documentTitle}`,
     );
 
     // Delete any existing chunks for this document
@@ -79,7 +79,7 @@ export async function embedAndStoreDocument(
     // Process each parent chunk
     const processSingleParent = async (
       parentContent: string,
-      parentIndex: number
+      parentIndex: number,
     ) => {
       console.log(`Processing parent chunk index: ${parentIndex}`);
 
@@ -126,14 +126,14 @@ export async function embedAndStoreDocument(
                 type: document?.ragSubtype?.toLowerCase() ?? "medicine", // "medicine" or "disease"
               },
             };
-          }
+          },
         );
 
         if (vectors && vectors.length > 0) {
           // Upsert to Pinecone
           await index.upsert(vectors);
           console.log(
-            `Upserted ${vectors.length} vectors for parent index ${parentIndex}`
+            `Upserted ${vectors.length} vectors for parent index ${parentIndex}`,
           );
 
           // Store chunk references in database
@@ -187,7 +187,7 @@ export async function embedAndStorePatientDocument(
   documentId: string,
   content: string,
   documentTitle: string,
-  patientId: string
+  patientId: string,
 ): Promise<boolean> {
   try {
     // Check if document is already ingested
@@ -210,7 +210,7 @@ export async function embedAndStorePatientDocument(
     }
 
     console.log(
-      `Processing ${parentChunks.length} parent chunks for patient document: ${documentTitle}`
+      `Processing ${parentChunks.length} parent chunks for patient document: ${documentTitle}`,
     );
 
     // Delete any existing chunks for this document
@@ -224,7 +224,7 @@ export async function embedAndStorePatientDocument(
     // Process each parent chunk
     const processSingleParent = async (
       parentContent: string,
-      parentIndex: number
+      parentIndex: number,
     ) => {
       console.log(`Processing parent chunk index: ${parentIndex}`);
 
@@ -273,14 +273,14 @@ export async function embedAndStorePatientDocument(
                 type: "patient", // "patient" for patient documents
               },
             };
-          }
+          },
         );
 
         if (vectors && vectors.length > 0) {
           // Upsert to Pinecone
           await index.upsert(vectors);
           console.log(
-            `Upserted ${vectors.length} vectors for parent index ${parentIndex}`
+            `Upserted ${vectors.length} vectors for parent index ${parentIndex}`,
           );
 
           // Store chunk references in database
@@ -328,7 +328,7 @@ export async function embedAndStorePatientDocument(
  * Deletes all vectors for a document from Pinecone and removes chunk records.
  */
 export async function deleteDocumentVectors(
-  documentId: string
+  documentId: string,
 ): Promise<boolean> {
   try {
     // Get all chunk IDs for this document
@@ -337,14 +337,41 @@ export async function deleteDocumentVectors(
       select: { pineconeId: true },
     });
 
+    const deletionTasks: Promise<unknown>[] = [];
+
     if (chunks.length > 0) {
-      // Delete from Pinecone
+      // Delete vectors by explicit Pinecone IDs tied to this document.
       const pineconeIds = chunks.map((c) => c.pineconeId);
-      await index.deleteMany(pineconeIds);
+      deletionTasks.push(index.deleteMany(pineconeIds));
       console.log(`Deleted ${pineconeIds.length} vectors from Pinecone`);
     }
 
-    // Delete chunk records from database (parent chunks will cascade delete rag chunks)
+    // Defensive cleanup for records that may have used patientId metadata keys.
+    const numericDocumentId = Number(documentId);
+    if (Number.isFinite(numericDocumentId)) {
+      deletionTasks.push(
+        index.deleteMany({
+          patientId: { $eq: numericDocumentId },
+        } as never),
+      );
+    }
+
+    deletionTasks.push(
+      index.deleteMany({
+        patientId: { $eq: String(documentId) },
+      } as never),
+    );
+
+    if (deletionTasks.length > 0) {
+      await Promise.all(deletionTasks);
+    }
+
+    // Delete chunk records from SQL database.
+    await prisma.ragChunk.deleteMany({
+      where: { documentId },
+    });
+
+    // Parent chunks hold the source text for RAG documents.
     await prisma.parentChunk.deleteMany({
       where: { documentId },
     });
@@ -366,7 +393,7 @@ export async function deleteDocumentVectors(
  * Fetches the parent text for a given parentChunkId.
  */
 export async function getParentText(
-  parentChunkId: string
+  parentChunkId: string,
 ): Promise<string | null> {
   try {
     const parentChunk = await prisma.parentChunk.findUnique({
@@ -384,12 +411,12 @@ export async function getParentText(
  * Fetches multiple parent texts by their IDs.
  */
 export async function getParentTexts(
-  parentChunkIds: string[]
+  parentChunkIds: string[],
 ): Promise<Map<string, string>> {
   try {
     // Filter out undefined/null values
     const validIds = parentChunkIds.filter(
-      (id): id is string => id != null && id !== undefined
+      (id): id is string => id != null && id !== undefined,
     );
 
     if (validIds.length === 0) {
@@ -419,7 +446,7 @@ export async function getParentTexts(
 export async function querySimilarDocuments(
   query: string,
   topK: number = 5,
-  filter?: Record<string, unknown>
+  filter?: Record<string, unknown>,
 ): Promise<
   Array<{
     documentId: string;
@@ -477,7 +504,7 @@ export async function querySimilarDocuments(
 export async function querySimilarDocumentsWithParentText(
   query: string,
   topK: number = 5,
-  filter?: Record<string, unknown>
+  filter?: Record<string, unknown>,
 ): Promise<
   Array<{
     documentId: string;
@@ -515,7 +542,7 @@ export async function querySimilarDocumentsWithParentText(
 export async function rerankDocuments(
   query: string,
   documents: string[],
-  topK?: number
+  topK?: number,
 ): Promise<
   Array<{
     document: string;

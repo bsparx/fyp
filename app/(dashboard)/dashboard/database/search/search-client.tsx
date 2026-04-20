@@ -1,7 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Search, FileText, Sparkles, Clock, ChevronRight, Pill, Activity } from "lucide-react";
+import {
+    Search,
+    FileText,
+    Sparkles,
+    Clock,
+    ChevronRight,
+    Pill,
+    Activity,
+    Network,
+} from "lucide-react";
 import {
     Card,
     CardContent,
@@ -30,17 +39,29 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { searchVectorDatabase, type ParentSearchResult } from "../actions";
+import {
+    searchHybridDatabase,
+    searchVectorDatabase,
+    type ParentSearchResult,
+    type HybridGraphContext,
+} from "../actions";
 
 type SearchTypeFilter = "all" | "medicine" | "disease";
+type RetrievalMode = "vector" | "hybrid";
 
 export function SearchClient() {
     const [query, setQuery] = React.useState("");
     const [typeFilter, setTypeFilter] = React.useState<SearchTypeFilter>("all");
+    const [retrievalMode, setRetrievalMode] = React.useState<RetrievalMode>("vector");
     const [results, setResults] = React.useState<ParentSearchResult[]>([]);
+    const [graphContext, setGraphContext] = React.useState<HybridGraphContext | null>(null);
     const [isSearching, setIsSearching] = React.useState(false);
     const [searchTime, setSearchTime] = React.useState<number | null>(null);
     const [hasSearched, setHasSearched] = React.useState(false);
+
+    const hasAnyResults =
+        results.length > 0 ||
+        (retrievalMode === "hybrid" && (graphContext?.evidence.length ?? 0) > 0);
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -51,12 +72,20 @@ export function SearchClient() {
         const startTime = performance.now();
 
         try {
-            const searchResults = await searchVectorDatabase(query, 50, typeFilter);
-            setResults(searchResults);
+            if (retrievalMode === "hybrid") {
+                const hybridResults = await searchHybridDatabase(query, 50, typeFilter);
+                setResults(hybridResults.vectorResults);
+                setGraphContext(hybridResults.graphContext);
+            } else {
+                const searchResults = await searchVectorDatabase(query, 50, typeFilter);
+                setResults(searchResults);
+                setGraphContext(null);
+            }
             setSearchTime(performance.now() - startTime);
         } catch (error) {
             console.error("Search error:", error);
             setResults([]);
+            setGraphContext(null);
         } finally {
             setIsSearching(false);
         }
@@ -89,11 +118,12 @@ export function SearchClient() {
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2">
                             <Sparkles className="h-5 w-5 text-primary" />
-                            Semantic Search
+                            {retrievalMode === "hybrid" ? "Hybrid Search" : "Semantic Search"}
                         </CardTitle>
                         <CardDescription>
-                            Search using natural language. Results are ranked by semantic similarity
-                            using Parent Document RAG with reranking.
+                            {retrievalMode === "hybrid"
+                                ? "Search vector chunks and structured clinical graph context in a single pass."
+                                : "Search using natural language. Results are ranked by semantic similarity using Parent Document RAG with reranking."}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -122,6 +152,30 @@ export function SearchClient() {
                                 </Button>
                             </div>
                             <div className="flex items-center gap-3">
+                                <span className="text-sm text-muted-foreground">Mode:</span>
+                                <Select
+                                    value={retrievalMode}
+                                    onValueChange={(value: RetrievalMode) => setRetrievalMode(value)}
+                                >
+                                    <SelectTrigger className="w-[210px]">
+                                        <SelectValue placeholder="Select mode" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="vector">
+                                            <span className="flex items-center gap-2">
+                                                <Search className="h-3.5 w-3.5" />
+                                                Vector Only
+                                            </span>
+                                        </SelectItem>
+                                        <SelectItem value="hybrid">
+                                            <span className="flex items-center gap-2">
+                                                <Network className="h-3.5 w-3.5 text-emerald-500" />
+                                                Hybrid (Vector + Graph)
+                                            </span>
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+
                                 <span className="text-sm text-muted-foreground">Search in:</span>
                                 <Select value={typeFilter} onValueChange={(value: SearchTypeFilter) => setTypeFilter(value)}>
                                     <SelectTrigger className="w-[180px]">
@@ -175,8 +229,10 @@ export function SearchClient() {
                                 <CardTitle>Results</CardTitle>
                                 <CardDescription>
                                     {hasSearched
-                                        ? results.length > 0
-                                            ? `Top ${results.length} parent chunks ranked by relevance`
+                                        ? hasAnyResults
+                                            ? retrievalMode === "hybrid"
+                                                ? `Vector hits: ${results.length} • Graph evidence: ${graphContext?.evidence.length ?? 0}`
+                                                : `Top ${results.length} parent chunks ranked by relevance`
                                             : "No results found"
                                         : "Enter a query to search"}
                                 </CardDescription>
@@ -194,12 +250,80 @@ export function SearchClient() {
                             <div className="flex flex-col items-center justify-center py-12">
                                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                                 <p className="mt-4 text-sm text-muted-foreground">
-                                    Searching vector database...
+                                    {retrievalMode === "hybrid"
+                                        ? "Searching vector and graph contexts..."
+                                        : "Searching vector database..."}
                                 </p>
                             </div>
-                        ) : results.length > 0 ? (
+                        ) : hasAnyResults ? (
                             <ScrollArea className="h-[calc(100vh-400px)] pr-4">
                                 <div className="space-y-4">
+                                    {retrievalMode === "hybrid" && graphContext && (
+                                        <Card className="border-dashed">
+                                            <CardHeader className="pb-3">
+                                                <CardTitle className="flex items-center gap-2 text-base">
+                                                    <Network className="h-4 w-4 text-emerald-500" />
+                                                    Private Graph Context
+                                                </CardTitle>
+                                                <CardDescription>
+                                                    Built from structured patient report entities and relationships.
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-3">
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Badge variant="outline">Patients: {graphContext.stats.patients}</Badge>
+                                                    <Badge variant="outline">Reports: {graphContext.stats.reports}</Badge>
+                                                    <Badge variant="outline">Observations: {graphContext.stats.observations}</Badge>
+                                                    <Badge variant="outline">Metrics: {graphContext.stats.metrics}</Badge>
+                                                </div>
+                                                {graphContext.queryTerms.length > 0 && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Matched terms: {graphContext.queryTerms.join(", ")}
+                                                    </p>
+                                                )}
+                                                {graphContext.evidence.length > 0 ? (
+                                                    <div className="space-y-2">
+                                                        {graphContext.evidence.slice(0, 8).map((ev) => (
+                                                            <div
+                                                                key={ev.id}
+                                                                className="rounded-md border bg-background p-3"
+                                                            >
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <p className="text-sm font-medium">
+                                                                        {ev.keyNormalized ?? ev.key}
+                                                                    </p>
+                                                                    <Badge variant="secondary" className="font-mono">
+                                                                        {ev.value}
+                                                                        {ev.unit ? ` ${ev.unit}` : ""}
+                                                                    </Badge>
+                                                                </div>
+                                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                                    {(ev.patientName ?? ev.patientId) + " • "}
+                                                                    {(ev.hospitalName ?? "Unknown hospital") + " • "}
+                                                                    {ev.reportDate
+                                                                        ? new Date(ev.reportDate).toLocaleDateString()
+                                                                        : "Unknown date"}
+                                                                </p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-muted-foreground">
+                                                        No graph evidence matched this query.
+                                                    </p>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    )}
+
+                                    {results.length === 0 && retrievalMode === "hybrid" && (
+                                        <Card className="border-dashed">
+                                            <CardContent className="pt-6 text-sm text-muted-foreground">
+                                                No vector chunks matched, but graph evidence was found.
+                                            </CardContent>
+                                        </Card>
+                                    )}
+
                                     {results.map((result, index) => {
                                         const { truncated, isTruncated } = truncateToLines(result.parentText, 5);
                                         return (
@@ -297,13 +421,23 @@ export function SearchClient() {
                         <CardTitle className="text-base">How it works</CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm text-muted-foreground">
-                        <ol className="list-inside list-decimal space-y-2">
-                            <li>Your query is converted to a vector embedding</li>
-                            <li>Child chunks are retrieved based on similarity</li>
-                            <li>Results are aggregated by parent chunks</li>
-                            <li>Parents are reranked using Reciprocal Rank Fusion</li>
-                            <li>Top 10 parent chunks are returned with scores</li>
-                        </ol>
+                        {retrievalMode === "hybrid" ? (
+                            <ol className="list-inside list-decimal space-y-2">
+                                <li>Your query is used for semantic vector retrieval</li>
+                                <li>Matching structured report rows are fetched as graph evidence</li>
+                                <li>Entities are linked as Patient → Report → Observation → Metric</li>
+                                <li>Vector parent chunks are reranked for final relevance</li>
+                                <li>Both contexts are shown together for hybrid inspection</li>
+                            </ol>
+                        ) : (
+                            <ol className="list-inside list-decimal space-y-2">
+                                <li>Your query is converted to a vector embedding</li>
+                                <li>Child chunks are retrieved based on similarity</li>
+                                <li>Results are aggregated by parent chunks</li>
+                                <li>Parents are reranked using Reciprocal Rank Fusion</li>
+                                <li>Top parent chunks are returned with scores</li>
+                            </ol>
+                        )}
                     </CardContent>
                 </Card>
 

@@ -117,7 +117,7 @@ async function convertLinkToJpeg(url: string): Promise<string> {
     } catch (sharpError) {
       console.warn(
         "Sharp not available, returning original image as base64",
-        sharpError
+        sharpError,
       );
       return `data:${
         response.headers["content-type"] || "image/png"
@@ -133,7 +133,7 @@ async function pdfToTextWithZAI(
   report = false,
   pdfBase64: string,
   startingPage: number,
-  endPage?: number
+  endPage?: number,
 ): Promise<string | null> {
   if (!ZAI_API_KEY) {
     console.warn("ZAI_API_KEY is not set, skipping Z.AI Layout Parsing.");
@@ -141,7 +141,7 @@ async function pdfToTextWithZAI(
   }
 
   console.log(
-    `Attempting Z.AI Layout Parsing API call for pages starting at ${startingPage}`
+    `Attempting Z.AI Layout Parsing API call for pages starting at ${startingPage}`,
   );
 
   try {
@@ -173,7 +173,7 @@ async function pdfToTextWithZAI(
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(
-            `Z.AI API returned status ${response.status}: ${errorText}`
+            `Z.AI API returned status ${response.status}: ${errorText}`,
           );
         }
 
@@ -219,7 +219,7 @@ async function pdfToTextWithZAI(
             label?: string;
             content: string;
           }>,
-          pageIndex: number
+          pageIndex: number,
         ) => {
           page.unshift({
             native_label: "page_break",
@@ -278,7 +278,7 @@ async function pdfToTextWithZAI(
                     });
 
                     console.log(
-                      `Successfully processed image with model: ${model}`
+                      `Successfully processed image with model: ${model}`,
                     );
                     break;
                   } catch (error) {
@@ -289,7 +289,7 @@ async function pdfToTextWithZAI(
 
                 if (!result) {
                   throw new Error(
-                    `All models failed to process image. Last error: ${lastError}`
+                    `All models failed to process image. Last error: ${lastError}`,
                   );
                 }
 
@@ -297,13 +297,13 @@ async function pdfToTextWithZAI(
                   result.choices[0]?.message?.content || "";
                 return `\n\n<Image>\n<ImageDescription>${imageDescription}</ImageDescription>\n</Image>\n\n`;
               }
-            }
+            },
           );
 
           const textChunks = await Promise.all(textChunksPromise);
           return textChunks.join("");
-        }
-      )
+        },
+      ),
     );
 
     const finalText = output.join("");
@@ -321,7 +321,7 @@ async function pdfToTextWithZAI(
 
 export async function pdfToText(
   pdfBase64: string,
-  startingPage: number
+  startingPage: number,
 ): Promise<string | null> {
   const prompt = initialExtractionPrompt(startingPage);
   console.log(`Starting PDF extraction from page ${startingPage}.`);
@@ -336,7 +336,7 @@ export async function pdfToText(
     console.warn(
       `Z.AI Layout Parsing returned null, retrying in ${delay}ms... (${
         attempts + 1
-      }/10)`
+      }/10)`,
     );
     await new Promise((res) => setTimeout(res, delay));
   }
@@ -346,7 +346,7 @@ export async function pdfToText(
   }
 
   console.log(
-    "Z.AI Layout Parsing failed or unavailable after 10 retries, falling back to Gemini..."
+    "Z.AI Layout Parsing failed or unavailable after 10 retries, falling back to Gemini...",
   );
 
   console.log("Trying Gemini fallback with native PDF...");
@@ -366,24 +366,29 @@ export async function pdfToText(
     const apiKey = apiKeys[currentIndex];
 
     console.log(
-      `Attempting Gemini API call with key at index: ${currentIndex}`
+      `Attempting Gemini API call with key at index: ${currentIndex}`,
     );
 
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const model = genAI.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        generationConfig: {
+          temperature: 0,
+        },
+      });
       const result = await model.generateContent([prompt, fileDataPart]);
       const response = result.response;
       const text = response.text();
 
       console.log(
-        `SUCCESS: Gemini API call succeeded for page ${startingPage}.`
+        `SUCCESS: Gemini API call succeeded for page ${startingPage}.`,
       );
       console.log("Response Text Length:", text?.length ?? 0);
 
       if (text === undefined || text === null) {
         console.warn(
-          "Response text was undefined or null, returning empty content."
+          "Response text was undefined or null, returning empty content.",
         );
         return "";
       }
@@ -391,7 +396,7 @@ export async function pdfToText(
       return text;
     } catch (error) {
       console.error(
-        `FAILURE: Gemini API call with key at index ${currentIndex} failed.`
+        `FAILURE: Gemini API call with key at index ${currentIndex} failed.`,
       );
       if (error instanceof Error) {
         console.error("Error Message:", error.message);
@@ -404,7 +409,7 @@ export async function pdfToText(
 }
 
 export async function processPdfAndConvertToText(
-  pdfBase64Array: string[]
+  pdfBase64Array: string[],
 ): Promise<string | null> {
   if (!pdfBase64Array.length) {
     console.error("processPdfAndConvertToText received no valid files.");
@@ -422,7 +427,7 @@ export async function processPdfAndConvertToText(
       const pdfDoc = await PDFDocument.load(pdfBytes);
       const pageIndices = Array.from(
         { length: pdfDoc.getPageCount() },
-        (_, i) => i
+        (_, i) => i,
       );
       const copiedPages = await mergedPdfDoc.copyPages(pdfDoc, pageIndices);
       copiedPages.forEach((page) => mergedPdfDoc.addPage(page));
@@ -443,7 +448,7 @@ export async function processPdfAndConvertToText(
     }
 
     console.log(
-      `PDF exceeds ${MAX_PAGES_PER_CHUNK} pages, splitting into chunks...`
+      `PDF exceeds ${MAX_PAGES_PER_CHUNK} pages, splitting into chunks...`,
     );
     const textExtractionPromises: Promise<{
       index: number;
@@ -459,12 +464,12 @@ export async function processPdfAndConvertToText(
         const endPage = Math.min(i + MAX_PAGES_PER_CHUNK, pageCount);
         const pageIndices = Array.from(
           { length: endPage - startPage },
-          (_, k) => startPage + k
+          (_, k) => startPage + k,
         );
 
         const copiedPages = await newPdfDoc.copyPages(
           mergedPdfDoc,
-          pageIndices
+          pageIndices,
         );
         copiedPages.forEach((page) => newPdfDoc.addPage(page));
 
@@ -479,7 +484,7 @@ export async function processPdfAndConvertToText(
     }
 
     console.log(
-      `Waiting for ${textExtractionPromises.length} chunks to be processed...`
+      `Waiting for ${textExtractionPromises.length} chunks to be processed...`,
     );
     const processedChunks = await Promise.all(textExtractionPromises);
     console.log("All chunks have been processed.");

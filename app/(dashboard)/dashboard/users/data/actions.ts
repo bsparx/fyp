@@ -8,6 +8,7 @@ import { extractReportDataWithAI } from "@/utils/reportExtractor";
 import cloudinary from "@/utils/cloudinary";
 import { clerkClient } from "@clerk/nextjs/server";
 import { Role } from "@/app/generated/prisma/enums";
+import type { Prisma } from "@/app/generated/prisma/client";
 import { Pinecone } from "@pinecone-database/pinecone";
 import {
   buildMedicalReportExtractedJson,
@@ -15,10 +16,15 @@ import {
   parseExtractedReportDate,
 } from "@/utils/structuredReportIngestion";
 import { parseReportText } from "@/utils/reportParser";
+import {
+  deleteDocumentGraph,
+  getDocumentKnowledgeGraphFromNeo4j,
+  syncDocumentGraphFromSql,
+} from "@/utils/graphRag";
 
 // Initialize Pinecone
 let pc: Pinecone;
-let index: any;
+let index: ReturnType<Pinecone["index"]> | undefined;
 if (
   process.env.PINECONE_API_KEY &&
   process.env.PINECONE_INDEX_NAME &&
@@ -29,7 +35,7 @@ if (
   });
   index = pc.index(
     process.env.PINECONE_INDEX_NAME,
-    process.env.PINECONE_INDEX_HOST
+    process.env.PINECONE_INDEX_HOST,
   );
 }
 
@@ -60,7 +66,7 @@ export async function createUser(
   username: string,
   email: string,
   password: string,
-  role: string
+  role: string,
 ): Promise<CreateUserResult> {
   // Validate required fields
   if (!username || !email || !password || !role) {
@@ -166,39 +172,45 @@ async function persistStructuredMedicalReport(args: {
   const metricBuildResult = buildStructuredMetricRows(
     args.extractedData.testValues,
     args.userId,
-    observedAt
+    observedAt,
   );
 
-  const medicalReport = await prisma.$transaction(async (tx) => {
-    const createdReport = await tx.medicalReport.create({
-      data: {
-        documentId: args.documentId,
-        userId: args.userId,
-        hospitalName: args.extractedData.hospitalName,
-        markdown: args.extractedText,
-        extractedJson: buildMedicalReportExtractedJson(
-          args.extractedData,
-          metricBuildResult
-        ),
-        reportDate: args.reportDate,
-        reportURL: args.reportURL,
-        passed: args.extractedData.passed,
-        fidelityScore: args.extractedData.fidelityScore,
-        conclusion: args.extractedData.conclusion,
-      },
-    });
-
-    if (metricBuildResult.rows.length > 0) {
-      await tx.medicalReportValue.createMany({
-        data: metricBuildResult.rows.map((row) => ({
-          ...row,
-          reportId: createdReport.id,
-        })),
+  const medicalReport = await prisma.$transaction(
+    async (tx) => {
+      const createdReport = await tx.medicalReport.create({
+        data: {
+          documentId: args.documentId,
+          userId: args.userId,
+          hospitalName: args.extractedData.hospitalName,
+          markdown: args.extractedText,
+          extractedJson: buildMedicalReportExtractedJson(
+            args.extractedData,
+            metricBuildResult,
+          ) as Prisma.InputJsonValue,
+          reportDate: args.reportDate,
+          reportURL: args.reportURL,
+          passed: args.extractedData.passed,
+          fidelityScore: args.extractedData.fidelityScore,
+          conclusion: args.extractedData.conclusion,
+        },
       });
-    }
 
-    return createdReport;
-  });
+      if (metricBuildResult.rows.length > 0) {
+        await tx.medicalReportValue.createMany({
+          data: metricBuildResult.rows.map((row) => ({
+            ...row,
+            reportId: createdReport.id,
+          })),
+        });
+      }
+
+      return createdReport;
+    },
+    {
+      maxWait: 15_000,
+      timeout: 30_000,
+    },
+  );
 
   return {
     medicalReport,
@@ -208,7 +220,7 @@ async function persistStructuredMedicalReport(args: {
 
 function enrichExtractionWithTextFallback(
   extractedData: Awaited<ReturnType<typeof extractReportDataWithAI>>,
-  extractedText: string
+  extractedText: string,
 ): Awaited<ReturnType<typeof extractReportDataWithAI>> {
   if (extractedData.testValues.length > 0) {
     return extractedData;
@@ -224,7 +236,9 @@ function enrichExtractionWithTextFallback(
     hospitalName: extractedData.hospitalName ?? parsed.hospitalName,
     reportDate:
       extractedData.reportDate ??
-      (parsed.reportDate ? parsed.reportDate.toISOString().split("T")[0] : null),
+      (parsed.reportDate
+        ? parsed.reportDate.toISOString().split("T")[0]
+        : null),
     testValues: parsed.keyValues,
     conclusion:
       extractedData.conclusion ??
@@ -235,8 +249,8 @@ function enrichExtractionWithTextFallback(
 function canUploadToCloudinary(): boolean {
   return Boolean(
     process.env.CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET,
   );
 }
 
@@ -248,7 +262,7 @@ async function uploadReportFileToCloudinary(args: {
 }): Promise<string | null> {
   if (!canUploadToCloudinary()) {
     console.warn(
-      "Cloudinary environment variables are not fully configured. Skipping report upload."
+      "Cloudinary environment variables are not fully configured. Skipping report upload.",
     );
     return null;
   }
@@ -265,7 +279,10 @@ async function uploadReportFileToCloudinary(args: {
     console.log(`Uploaded file to Cloudinary: ${uploadResult.secure_url}`);
     return uploadResult.secure_url;
   } catch (error) {
-    console.error("Cloudinary upload failed. Continuing without reportURL.", error);
+    console.error(
+      "Cloudinary upload failed. Continuing without reportURL.",
+      error,
+    );
     return null;
   }
 }
@@ -276,11 +293,11 @@ export type PatientDataType = "REPORT" | "COMMENT";
  * Upload and process PDF/Image documents for a user.
  * Stores documents in the database with PATIENT type.
  * Supports two data types:
- * - COMMENT: Semantic ingestion into vector database (OCR only)
- * - REPORT: Extract key-value pairs from medical reports (AI extraction)
+ * - COMMENT: Semantic ingestion into vector database + graph sync
+ * - REPORT: Extract key-value pairs into SQL + semantic ingestion (no graph sync)
  */
 export async function uploadUserDocument(
-  formData: FormData
+  formData: FormData,
 ): Promise<UploadUserDocumentResult> {
   try {
     const title = formData.get("title") as string;
@@ -308,7 +325,7 @@ export async function uploadUserDocument(
     }
 
     console.log(
-      `Processing ${files.length} file(s) for user ${userId} as ${dataType}...`
+      `Processing ${files.length} file(s) for user ${userId} as ${dataType}...`,
     );
 
     // Verify user exists before proceeding
@@ -336,7 +353,7 @@ export async function uploadUserDocument(
 
     const processFile = async (
       file: FileData,
-      index: number
+      index: number,
     ): Promise<{ success: boolean; testValues: number; error?: string }> => {
       const fileTitle = totalFiles === 1 ? title : `${title}-${index + 1}`;
       const singleFileArray = [file];
@@ -344,7 +361,7 @@ export async function uploadUserDocument(
       console.log(
         `Processing file ${index + 1}/${totalFiles}: ${
           file.name
-        } as "${fileTitle}" (${dataType})`
+        } as "${fileTitle}" (${dataType})`,
       );
 
       try {
@@ -361,7 +378,7 @@ export async function uploadUserDocument(
         }
 
         console.log(
-          `File ${file.name}: Extracted ${extractedText.length} characters of text.`
+          `File ${file.name}: Extracted ${extractedText.length} characters of text.`,
         );
 
         // Store the single file's data
@@ -390,31 +407,38 @@ export async function uploadUserDocument(
           });
 
           console.log(
-            `Created comment document record: ${document.id} for file ${file.name}`
+            `Created comment document record: ${document.id} for file ${file.name}`,
           );
+
+          const graphSynced = await syncDocumentGraphFromSql(document.id);
+          if (!graphSynced) {
+            console.warn(
+              `Neo4j sync skipped/failed for comment document ${document.id}`,
+            );
+          }
 
           // Embed and store in Pinecone with patient metadata (run in background)
           embedAndStorePatientDocument(
             document.id,
             extractedText,
             fileTitle,
-            verifiedUserId
+            verifiedUserId,
           )
             .then((success) => {
               if (success) {
                 console.log(
-                  `Successfully embedded patient document: ${document.id}`
+                  `Successfully embedded patient document: ${document.id}`,
                 );
               } else {
                 console.error(
-                  `Failed to embed patient document: ${document.id}`
+                  `Failed to embed patient document: ${document.id}`,
                 );
               }
             })
             .catch((error) => {
               console.error(
                 `Error embedding patient document: ${document.id}`,
-                error
+                error,
               );
             });
 
@@ -428,16 +452,16 @@ export async function uploadUserDocument(
           const extractedData = await extractReportDataWithAI(
             extractedText,
             file.base64,
-            fileType
+            fileType,
           );
           const enrichedExtractedData = enrichExtractionWithTextFallback(
             extractedData,
-            extractedText
+            extractedText,
           );
 
           // Phase 1: Parse canonical report metadata for SQL storage.
           const reportDate = parseExtractedReportDate(
-            enrichedExtractedData.reportDate
+            enrichedExtractedData.reportDate,
           );
 
           const document = await prisma.document.create({
@@ -452,7 +476,7 @@ export async function uploadUserDocument(
           });
 
           console.log(
-            `Created report document record: ${document.id} for file ${file.name}`
+            `Created report document record: ${document.id} for file ${file.name}`,
           );
 
           // Upload the file to Cloudinary
@@ -483,12 +507,12 @@ export async function uploadUserDocument(
             document.id,
             JSON.stringify(enrichedExtractedData),
             fileTitle,
-            verifiedUserId
+            verifiedUserId,
           )
             .then((success) => {
               if (success) {
                 console.log(
-                  `Successfully embedded medical report: ${document.id}`
+                  `Successfully embedded medical report: ${document.id}`,
                 );
               } else {
                 console.error(`Failed to embed medical report: ${document.id}`);
@@ -497,12 +521,12 @@ export async function uploadUserDocument(
             .catch((error) => {
               console.error(
                 `Error embedding medical report: ${document.id}`,
-                error
+                error,
               );
             });
 
           console.log(
-            `Created medical report: ${medicalReport.id} with ${metricBuildResult.rows.length} values for file ${file.name} (numeric parsed: ${metricBuildResult.numericParsedCount}, alias mapped: ${metricBuildResult.aliasMappedCount}, composite expanded: ${metricBuildResult.compositeExpandedCount}, unmapped: ${metricBuildResult.unmappedMetricCount}, skipped: ${metricBuildResult.skippedCount})`
+            `Created medical report: ${medicalReport.id} with ${metricBuildResult.rows.length} values for file ${file.name} (numeric parsed: ${metricBuildResult.numericParsedCount}, alias mapped: ${metricBuildResult.aliasMappedCount}, composite expanded: ${metricBuildResult.compositeExpandedCount}, unmapped: ${metricBuildResult.unmappedMetricCount}, skipped: ${metricBuildResult.skippedCount})`,
           );
 
           return { success: true, testValues: extractedData.testValues.length };
@@ -519,7 +543,7 @@ export async function uploadUserDocument(
 
     // Run all file processing in parallel
     const results = await Promise.all(
-      files.map((file, index) => processFile(file, index))
+      files.map((file, index) => processFile(file, index)),
     );
 
     const successCount = results.filter((r) => r.success).length;
@@ -599,13 +623,63 @@ export async function getUserById(userId: string) {
   }
 }
 
+export interface UserFidelitySummary {
+  averageFidelityScore: number | null;
+  scoredReports: number;
+  totalReports: number;
+}
+
+/**
+ * Get average fidelity score summary for a patient's medical reports.
+ */
+export async function getUserAverageFidelitySummary(
+  userId: string,
+): Promise<UserFidelitySummary> {
+  try {
+    const [scoredAggregate, totalReports] = await Promise.all([
+      prisma.medicalReport.aggregate({
+        where: {
+          userId,
+          fidelityScore: {
+            gt: 0,
+          },
+        },
+        _avg: {
+          fidelityScore: true,
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+      prisma.medicalReport.count({
+        where: {
+          userId,
+        },
+      }),
+    ]);
+
+    return {
+      averageFidelityScore: scoredAggregate._avg.fidelityScore ?? null,
+      scoredReports: scoredAggregate._count._all,
+      totalReports,
+    };
+  } catch (error) {
+    console.error("Error fetching user average fidelity summary:", error);
+    return {
+      averageFidelityScore: null,
+      scoredReports: 0,
+      totalReports: 0,
+    };
+  }
+}
+
 /**
  * Get documents for a specific user with pagination.
  */
 export async function getUserDocuments(
   userId: string,
   page: number = 1,
-  limit: number = 6
+  limit: number = 6,
 ) {
   try {
     const documentsPromise = prisma.document.findMany({
@@ -689,9 +763,11 @@ export async function getAllUsersWithDocumentCount() {
  * Delete a user document.
  */
 export async function deleteUserDocument(
-  documentId: string
+  documentId: string,
 ): Promise<UploadUserDocumentResult> {
   try {
+    await deleteDocumentGraph(documentId);
+
     await prisma.document.delete({
       where: { id: documentId },
     });
@@ -730,9 +806,10 @@ export async function getMedicalReportDetails(documentId: string) {
       return null;
     }
 
-    const extractedJson = medicalReport.extractedJson as
-      | Record<string, unknown>
-      | null;
+    const extractedJson = medicalReport.extractedJson as Record<
+      string,
+      unknown
+    > | null;
     const structuredIngestion =
       extractedJson && typeof extractedJson === "object"
         ? (extractedJson["structuredIngestion"] as
@@ -788,7 +865,7 @@ export interface DocumentDetails {
  * Get document details including parent/child chunks count and files
  */
 export async function getDocumentDetails(
-  documentId: string
+  documentId: string,
 ): Promise<DocumentDetails | null> {
   try {
     // Verify document exists
@@ -839,6 +916,32 @@ export async function getDocumentDetails(
   }
 }
 
+export async function getDocumentKnowledgeGraph(documentId: string) {
+  try {
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: {
+        type: true,
+        patientDataType: true,
+      },
+    });
+
+    if (!document) {
+      return null;
+    }
+
+    // Patient graph is only supported for COMMENT/notes documents.
+    if (document.type === "PATIENT" && document.patientDataType !== "COMMENT") {
+      return null;
+    }
+
+    return await getDocumentKnowledgeGraphFromNeo4j(documentId);
+  } catch (error) {
+    console.error("Error fetching document knowledge graph details:", error);
+    return null;
+  }
+}
+
 /**
  * Delete a document and all its associated data
  */
@@ -871,6 +974,8 @@ export async function deleteDocument(documentId: string) {
         console.error("Failed to delete from Pinecone:", pineconeError);
       }
     }
+
+    await deleteDocumentGraph(documentId);
 
     // Delete all associated data in the correct order due to foreign key constraints
 
@@ -923,6 +1028,11 @@ export async function deleteDocument(documentId: string) {
  */
 export async function deleteAllDocuments(userId: string) {
   try {
+    const userDocumentIds = await prisma.document.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
     if (index) {
       try {
         await Promise.all([
@@ -937,6 +1047,12 @@ export async function deleteAllDocuments(userId: string) {
       } catch (pineconeError) {
         console.error("Failed to delete from Pinecone:", pineconeError);
       }
+    }
+
+    if (userDocumentIds.length > 0) {
+      await Promise.allSettled(
+        userDocumentIds.map((doc) => deleteDocumentGraph(doc.id)),
+      );
     }
 
     // We need to delete in the correct order to respect foreign key constraints

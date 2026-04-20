@@ -47,6 +47,8 @@ interface PdfFileItem {
     base64?: string
 }
 
+const MAX_PDF_FILES = 10
+
 function SortablePdfItem({
     item,
     onRemove,
@@ -150,17 +152,17 @@ export default function UploadPage() {
             setMessage({ error: true, text: "Some files were skipped. Only PDF files are allowed." })
         }
 
-        const remainingSlots = 5 - pdfFiles.length
+        const remainingSlots = MAX_PDF_FILES - pdfFiles.length
 
         if (remainingSlots <= 0) {
-            setMessage({ error: true, text: "Maximum of 5 PDFs already reached." })
+            setMessage({ error: true, text: `Maximum of ${MAX_PDF_FILES} PDFs already reached.` })
             return
         }
 
         const filesToAdd = validFiles.slice(0, remainingSlots)
 
         if (validFiles.length > remainingSlots) {
-            setMessage({ error: true, text: `Only the first ${remainingSlots} file(s) were added. Maximum is 5 PDFs total.` })
+            setMessage({ error: true, text: `Only the first ${remainingSlots} file(s) were added. Maximum is ${MAX_PDF_FILES} PDFs total.` })
         }
 
         const newPdfItems: PdfFileItem[] = filesToAdd.map((file) => ({
@@ -374,10 +376,10 @@ export default function UploadPage() {
                                 htmlFor="pdfFile"
                                 className="block text-sm font-medium text-slate-700 dark:text-slate-200"
                             >
-                                Upload PDF Documents (up to 5)
+                                Upload PDF Documents (up to {MAX_PDF_FILES})
                             </label>
                             <span className="text-sm text-slate-500 dark:text-slate-400">
-                                {pdfFiles.length}/5 files
+                                {pdfFiles.length}/{MAX_PDF_FILES} files
                             </span>
                         </div>
 
@@ -390,11 +392,11 @@ export default function UploadPage() {
                             className="hidden"
                             onChange={handleFileChange}
                             ref={fileInputRef}
-                            disabled={isLoading || pdfFiles.length >= 5}
+                            disabled={isLoading || pdfFiles.length >= MAX_PDF_FILES}
                         />
 
-                        {/* Upload area - only show if less than 5 files */}
-                        {pdfFiles.length < 5 && (
+                        {/* Upload area - only show if less than max files */}
+                        {pdfFiles.length < MAX_PDF_FILES && (
                             <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center hover:border-blue-500 dark:hover:border-blue-400 bg-slate-50/50 dark:bg-slate-800/30 transition-colors duration-200">
                                 <div className="space-y-3">
                                     <div className="mx-auto w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
@@ -412,7 +414,7 @@ export default function UploadPage() {
                                         </label>
                                     </div>
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        PDF files only, up to 10MB each • {5 - pdfFiles.length} slot(s) remaining
+                                        PDF files only, up to 10MB each • {MAX_PDF_FILES - pdfFiles.length} slot(s) remaining
                                     </p>
                                 </div>
                             </div>
@@ -453,10 +455,10 @@ export default function UploadPage() {
                             </div>
                         )}
 
-                        {pdfFiles.length >= 5 && (
+                        {pdfFiles.length >= MAX_PDF_FILES && (
                             <p className="text-amber-600 dark:text-amber-400 text-sm flex items-center gap-1.5">
                                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400"></span>
-                                Maximum of 5 PDFs reached
+                                Maximum of {MAX_PDF_FILES} PDFs reached
                             </p>
                         )}
                     </div>
