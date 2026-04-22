@@ -1,5 +1,15 @@
 import { getDocuments } from "./actions";
 import { BrowseDocumentsClient } from "./browse-client";
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import { Separator } from "@/components/ui/separator"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export const dynamic = "force-dynamic";
 
@@ -7,16 +17,38 @@ export default async function DatabaseBrowsePage() {
     const documents = await getDocuments();
 
     return (
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Browse Documents</h1>
-                    <p className="text-muted-foreground">
-                        View and manage all embedded documents in the vector database
-                    </p>
+        <>
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#e5e0d8] bg-[#fdfcf9]">
+                <div className="flex items-center gap-2 px-6">
+                    <SidebarTrigger className="-ml-1 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/40" />
+                    <Separator
+                        orientation="vertical"
+                        className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]"
+                    />
+                    <Breadcrumb>
+                        <BreadcrumbList>
+                            <BreadcrumbItem className="hidden md:block">
+                                <BreadcrumbLink href="/dashboard" className="text-[#8a8279] hover:text-[#3d3630]">Dashboard</BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator className="hidden md:block text-[#e5e0d8]" />
+                            <BreadcrumbItem>
+                                <BreadcrumbPage className="text-[#3d3630] font-medium">Browse Documents</BreadcrumbPage>
+                            </BreadcrumbItem>
+                        </BreadcrumbList>
+                    </Breadcrumb>
                 </div>
+            </header>
+            <div className="flex flex-1 flex-col gap-4 p-6 pt-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight text-[#3d3630]">Browse Documents</h1>
+                        <p className="text-[#8a8279] text-sm mt-1">
+                            View and manage all embedded documents in the vector database
+                        </p>
+                    </div>
+                </div>
+                <BrowseDocumentsClient documents={documents} />
             </div>
-            <BrowseDocumentsClient documents={documents} />
-        </div>
+        </>
     );
 }

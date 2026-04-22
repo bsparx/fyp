@@ -18,10 +18,14 @@ export interface GraphEdgePayload {
 }
 
 export interface GraphEvidencePayload {
+  kind: "observation" | "clinical";
   id: string;
-  patientId: string;
+  patientId: string | null;
   patientName: string | null;
-  reportId: string;
+  reportId: string | null;
+  documentId?: string | null;
+  relationType?: string | null;
+  linkedEntityKey?: string | null;
   documentTitle: string | null;
   reportDate: string | null;
   hospitalName: string | null;
@@ -150,6 +154,14 @@ interface GraphRelationRow {
   confidence: number;
 }
 
+type GraphPromptKind = "patient" | "disease" | "medicine";
+
+interface GraphPromptContext {
+  kind: GraphPromptKind;
+  patientNodeId: string | null;
+  visitNodeId: string | null;
+}
+
 function hasGraphConfig(): boolean {
   return Boolean(NEO4J_URI && NEO4J_USER && NEO4J_PASSWORD);
 }
@@ -164,6 +176,80 @@ function toMetricSlug(value: string): string {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
   return slug || "unknown_metric";
+}
+
+function normalizeSlug(id: string): string {
+  return id
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+function normalizeEntityId(id: string): string {
+  const slug = normalizeSlug(id)
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (!slug) {
+    return "unknown_entity";
+  }
+
+  // Compound prefixes must be checked before their single-word prefixes
+  if (slug.startsWith("drug_class_")) {
+    return slug;
+  }
+
+  if (slug.startsWith("side_effect_")) {
+    return slug;
+  }
+
+  if (slug.startsWith("risk_factor_")) {
+    return slug;
+  }
+
+  if (slug.startsWith("dosage_guideline_")) {
+    return slug;
+  }
+
+  // Legacy aliases (in case older data used these formats)
+  if (slug.startsWith("diagnosis_")) {
+    return `disease_${slug.slice("diagnosis_".length)}`;
+  }
+
+  if (slug.startsWith("drug_")) {
+    return `medicine_${slug.slice("drug_".length)}`;
+  }
+
+  if (slug.startsWith("medication_")) {
+    return `medicine_${slug.slice("medication_".length)}`;
+  }
+
+  if (slug.startsWith("sideeffect_")) {
+    return `side_effect_${slug.slice("sideeffect_".length)}`;
+  }
+
+  if (slug.startsWith("riskfactor_")) {
+    return `risk_factor_${slug.slice("riskfactor_".length)}`;
+  }
+
+  if (slug.startsWith("drugclass_")) {
+    return `drug_class_${slug.slice("drugclass_".length)}`;
+  }
+
+  if (slug.startsWith("bodysystem_")) {
+    return `body_system_${slug.slice("bodysystem_".length)}`;
+  }
+
+  return slug;
+}
+
+function toDateOnlyIso(value: Date | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  return value.toISOString().slice(0, 10);
 }
 
 function clampConfidence(value: unknown, fallback: number = 0.7): number {
@@ -186,8 +272,305 @@ function normalizeGraphType(value: string, fallback: string): string {
   return normalized || fallback;
 }
 
+function canonicalizeGraphType(type: string): string {
+  const normalized = normalizeGraphType(type, "CONCEPT");
+
+  if (normalized === "DIAGNOSIS") {
+    return "DISEASE";
+  }
+
+  if (normalized === "DRUG" || normalized === "MEDICATION") {
+    return "MEDICINE";
+  }
+
+  return normalized;
+}
+
+function inferGraphTypeFromDeterministicId(id: string): string | null {
+  // Compound prefixes must come before their substrings
+  if (id.startsWith("drug_class_")) {
+    return "DRUG_CLASS";
+  }
+
+  if (id.startsWith("side_effect_")) {
+    return "SIDE_EFFECT";
+  }
+
+  if (id.startsWith("risk_factor_")) {
+    return "RISK_FACTOR";
+  }
+
+  if (id.startsWith("dosage_guideline_")) {
+    return "DOSAGE_GUIDELINE";
+  }
+
+  if (
+    id.startsWith("medicine_") ||
+    id.startsWith("drug_") ||
+    id.startsWith("medication_")
+  ) {
+    return "MEDICINE";
+  }
+
+  if (id.startsWith("disease_") || id.startsWith("diagnosis_")) {
+    return "DISEASE";
+  }
+
+  if (id.startsWith("symptom_")) {
+    return "SYMPTOM";
+  }
+
+  if (id.startsWith("complication_")) {
+    return "COMPLICATION";
+  }
+
+  if (id.startsWith("procedure_")) {
+    return "PROCEDURE";
+  }
+
+  if (id.startsWith("patient_")) {
+    return "PATIENT";
+  }
+
+  if (id.startsWith("visit_")) {
+    return "VISIT";
+  }
+
+  return null;
+}
+
 function toEntityKey(type: string, name: string): string {
-  return `${normalizeGraphType(type, "CONCEPT")}:${toMetricSlug(name)}`;
+  return `${canonicalizeGraphType(type)}:${toMetricSlug(name)}`;
+}
+
+function toEntityKeyFromId(type: string, id: string): string {
+  return `${canonicalizeGraphType(type)}:${normalizeEntityId(id)}`;
+}
+
+function toCypherEntityLabel(type: string): string {
+  const canonical = canonicalizeGraphType(type);
+  const sanitized = canonical
+    .replace(/[^A-Z0-9_]/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (!sanitized) {
+    return "Concept";
+  }
+
+  const pascal = sanitized
+    .split("_")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => `${segment.charAt(0)}${segment.slice(1).toLowerCase()}`)
+    .join("");
+
+  if (!pascal) {
+    return "Concept";
+  }
+
+  if (/^[A-Za-z]/.test(pascal)) {
+    return pascal;
+  }
+
+  return `Type${pascal}`;
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function toStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => toNullableString(entry)?.trim() ?? "")
+    .filter((entry) => entry.length > 0);
+}
+
+function firstNonEmptyString(values: unknown[]): string | null {
+  for (const value of values) {
+    const parsed = toNullableString(value)?.trim();
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function resolveGraphPromptKind(args: {
+  domain: string | null;
+  documentType: string | null;
+}): GraphPromptKind {
+  const normalizedDomain = (args.domain ?? "").toLowerCase();
+  if (normalizedDomain === "medicine") {
+    return "medicine";
+  }
+
+  if (normalizedDomain === "disease") {
+    return "disease";
+  }
+
+  const normalizedDocumentType = (args.documentType ?? "").toUpperCase();
+  if (normalizedDocumentType === "PATIENT") {
+    return "patient";
+  }
+
+  return "patient";
+}
+
+function buildDeterministicIdRules(context: GraphPromptContext): string {
+  const lines = [
+    "ID Generation Rules:",
+    "- IDs must be deterministic slugs, not random strings.",
+    "- Format: <label_lowercase>_<name_snake_case> (example: disease_type_2_diabetes).",
+    "- The same real-world entity must always produce the same id across documents.",
+    "- Never use UUIDs, counters, or run-specific suffixes.",
+  ];
+
+  if (context.patientNodeId) {
+    lines.push(
+      `- Patient node id must be exactly \"${context.patientNodeId}\" (provided by system metadata).`,
+    );
+  }
+
+  if (context.visitNodeId) {
+    lines.push(
+      `- Visit node id must be exactly \"${context.visitNodeId}\" (provided by system metadata).`,
+    );
+  }
+
+  lines.push(
+    "- If an anchor id is missing, omit that node rather than inventing an id.",
+  );
+
+  return lines.join("\n");
+}
+
+function buildExtractionPrompt(context: GraphPromptContext): string {
+  const idRules = buildDeterministicIdRules(context);
+
+  if (context.kind === "patient") {
+    return `You are a clinical graph extractor for a hospital management system.
+Extract entities and relationships from a patient comment or post-visit summary.
+Your output will be used for graph traversal — only extract what is explicitly stated and clinically traversable.
+
+Return ONLY a valid JSON object:
+{
+  "nodes": [
+    { "label": "<Patient|Disease|Medicine|Symptom|Procedure>", "id": "<slug>", "properties": {} }
+  ],
+  "relationships": [
+    { "from_id": "<id>", "to_id": "<id>", "type": "<TYPE>", "properties": {} }
+  ]
+}
+
+NODES — exactly these 5 types, no others:
+- Patient   → id from systemMetadata.patientNodeId. Properties: name, age, gender.
+- Disease   → id: disease_<name_slug>. Properties: name, status (active|resolved), severity.
+- Medicine  → id: medicine_<name_slug>. Properties: genericName, dosage, frequency.
+- Symptom   → id: symptom_<name_slug>. Properties: name, duration, severity.
+- Procedure → id: procedure_<name_slug>. Properties: name, outcome.
+
+RELATIONSHIPS — exactly these 5, no others:
+- (Patient)-[:HAS_CONDITION {status, severity}]->(Disease)
+- (Patient)-[:ON_MEDICATION {dosage, frequency}]->(Medicine)
+- (Patient)-[:PRESENTED_WITH {duration, severity}]->(Symptom)
+- (Patient)-[:UNDERWENT {outcome}]->(Procedure)
+- (Symptom)-[:SYMPTOM_OF]->(Disease)
+
+STRICT RULES:
+- One Patient node per document, id must equal systemMetadata.patientNodeId exactly.
+- Only extract what is explicitly stated. Never infer or hallucinate.
+- Do not extract lab values, vitals, or measurements — those are in SQL.
+- Do not extract doctor names, hospital names, or dates as nodes.
+- Maximum 15 nodes and 20 relationships.
+
+${idRules}
+- The user payload is JSON with keys markdownContent, documentMetadata, and systemMetadata.`;
+  }
+
+  if (context.kind === "disease") {
+    return `You are a medical ontology extractor for a hospital management system.
+Extract a disease knowledge graph from a disease information document.
+Your output enables clinical queries like: "what are the symptoms, complications, and treatments for Disease X?"
+
+Return ONLY a valid JSON object:
+{
+  "nodes": [
+    { "label": "<Disease|Symptom|Complication|RiskFactor|Medicine>", "id": "<slug>", "properties": {} }
+  ],
+  "relationships": [
+    { "from_id": "<id>", "to_id": "<id>", "type": "<TYPE>", "properties": {} }
+  ]
+}
+
+NODES — exactly these 5 types, no others:
+- Disease     → id: disease_<name_slug>. Properties: name, icdCode, category, description (1 sentence max).
+- Symptom     → id: symptom_<name_slug>. Properties: name, specificity (pathognomonic|common|rare).
+- Complication → id: complication_<name_slug>. Properties: name, severity (mild|moderate|severe), timeframe (acute|chronic).
+- RiskFactor  → id: risk_factor_<name_slug>. Properties: name, modifiable (true|false).
+- Medicine    → id: medicine_<name_slug>. Properties: genericName. Bridge node to medicine graph — name only.
+
+RELATIONSHIPS — exactly these 6, no others:
+- (Disease)-[:HAS_SYMPTOM {specificity}]->(Symptom)
+- (Disease)-[:CAUSES_COMPLICATION {severity, timeframe}]->(Complication)
+- (Disease)-[:HAS_RISK_FACTOR {strength: strong|moderate|weak}]->(RiskFactor)
+- (Disease)-[:TREATED_BY {lineOfTreatment: first|second|adjunct}]->(Medicine)
+- (Disease)-[:COMORBID_WITH {evidence: strong|moderate|weak}]->(Disease)
+- (Disease)-[:SUBTYPE_OF]->(Disease)
+
+STRICT RULES:
+- Reuse the same node id if the same entity appears multiple times.
+- Medicine nodes here are bridge stubs only — do not add properties beyond genericName.
+- Do not extract BodySystem, Biomarker, or Procedure nodes.
+- Maximum 40 nodes and 60 relationships.
+
+${idRules}
+- The user payload is JSON with keys markdownContent, documentMetadata, and systemMetadata.`;
+  }
+
+  return `You are a pharmacological graph extractor for a hospital management system.
+Extract a medicine knowledge graph from a medicine information document.
+Your output enables clinical safety queries: drug-disease contraindications, drug-drug interactions, and treatment indications.
+
+Return ONLY a valid JSON object:
+{
+  "nodes": [
+    { "label": "<Medicine|SideEffect|DrugClass|Disease>", "id": "<slug>", "properties": {} }
+  ],
+  "relationships": [
+    { "from_id": "<id>", "to_id": "<id>", "type": "<TYPE>", "properties": {} }
+  ]
+}
+
+NODES — exactly these 4 types, no others:
+- Medicine  → id: medicine_<generic_name_slug>. Properties: genericName, brandNames (array of strings), routeOfAdministration, formulation.
+- SideEffect → id: side_effect_<name_slug>. Properties: name, severity (mild|moderate|severe), frequency (common|uncommon|rare).
+- DrugClass → id: drug_class_<name_slug>. Properties: name, mechanismOfAction (1 sentence max).
+- Disease   → id: disease_<name_slug>. Properties: name. Bridge node to disease graph — name only.
+
+RELATIONSHIPS — exactly these 5, no others:
+- (Medicine)-[:INDICATED_FOR {lineOfTreatment: first|second|adjunct}]->(Disease)
+- (Medicine)-[:CONTRAINDICATED_FOR {reason, severity: absolute|relative}]->(Disease)
+- (Medicine)-[:HAS_SIDE_EFFECT {frequency, severity}]->(SideEffect)
+- (Medicine)-[:BELONGS_TO_CLASS]->(DrugClass)
+- (Medicine)-[:INTERACTS_WITH {severity: major|moderate|minor, effect}]->(Medicine)
+
+STRICT RULES:
+- Disease nodes are bridge stubs only — do not add properties beyond name.
+- brandNames must be a JSON array of strings, e.g. ["Glucophage", "Fortamet"].
+- A medicine cannot have INTERACTS_WITH pointing to itself.
+- Do not extract Ingredient, DosageGuideline, or Contraindication nodes.
+- Maximum 25 nodes and 40 relationships.
+
+${idRules}
+- The user payload is JSON with keys markdownContent, documentMetadata, and systemMetadata.`;
 }
 
 function extractMarkdownFromDocumentContent(content: string): string {
@@ -225,52 +608,130 @@ function parseJsonObject(text: string): unknown {
   }
 }
 
-function normalizeExtractedGraph(payload: unknown): {
+function normalizeExtractedGraph(
+  payload: unknown,
+  options?: {
+    patientNodeId?: string | null;
+    visitNodeId?: string | null;
+  },
+): {
   entities: GraphEntityRow[];
   relations: GraphRelationRow[];
 } {
-  const raw = payload as Record<string, unknown>;
-  const entitiesInput = Array.isArray(raw?.entities)
-    ? (raw.entities as Array<Record<string, unknown>>)
+  const raw = toRecord(payload);
+  const entitiesInput = Array.isArray(raw.entities)
+    ? (raw.entities as Array<unknown>)
     : [];
-  const relationsInput = Array.isArray(raw?.relations)
-    ? (raw.relations as Array<Record<string, unknown>>)
+  const nodesInput = Array.isArray(raw.nodes)
+    ? (raw.nodes as Array<unknown>)
+    : [];
+  const relationsInput = Array.isArray(raw.relations)
+    ? (raw.relations as Array<unknown>)
+    : [];
+  const relationshipsInput = Array.isArray(raw.relationships)
+    ? (raw.relationships as Array<unknown>)
     : [];
 
   const entityRows = new Map<string, GraphEntityRow>();
   const aliasToKey = new Map<string, string>();
 
-  for (const entity of entitiesInput) {
-    const idRaw = toNullableString(entity.id);
-    const nameRaw =
-      toNullableString(entity.name) ??
-      toNullableString(entity.canonicalName) ??
-      idRaw;
-    if (!nameRaw) {
+  for (const entityLike of [...entitiesInput, ...nodesInput]) {
+    const entity = toRecord(entityLike);
+    const properties = toRecord(entity.properties);
+    const brandNames = toStringList(properties.brandNames);
+
+    const idRaw = firstNonEmptyString([entity.id, properties.id]);
+    const normalizedLlmId = idRaw ? normalizeEntityId(idRaw) : null;
+    const inferredType = normalizedLlmId
+      ? inferGraphTypeFromDeterministicId(normalizedLlmId)
+      : null;
+    const type = canonicalizeGraphType(
+      firstNonEmptyString([
+        inferredType,
+        entity.type,
+        entity.label,
+        properties.type,
+      ]) ?? "CONCEPT",
+    );
+
+    const forcedId =
+      type === "PATIENT" && options?.patientNodeId
+        ? options.patientNodeId
+        : type === "VISIT" && options?.visitNodeId
+          ? options.visitNodeId
+          : normalizedLlmId;
+
+    const nameRaw = firstNonEmptyString([
+      entity.name,
+      properties.name,
+      properties.conditionName,
+      properties.genericName,
+      properties.displayName,
+      brandNames[0] ?? null,
+      properties.title,
+      properties.key,
+      properties.patientId,
+      entity.canonicalName,
+      forcedId,
+    ]);
+
+    if (!nameRaw && !forcedId) {
       continue;
     }
 
-    const type = normalizeGraphType(
-      toNullableString(entity.type) ?? "CONCEPT",
-      "CONCEPT",
-    );
-    const key = toEntityKey(type, nameRaw);
+    const key = forcedId
+      ? toEntityKeyFromId(type, forcedId)
+      : toEntityKey(type, nameRaw as string);
+
     const row: GraphEntityRow = {
       key,
-      name: nameRaw,
+      name: nameRaw ?? forcedId ?? key,
       type,
-      canonicalName: toNullableString(entity.canonicalName),
-      description: toNullableString(entity.description),
-      evidence: toNullableString(entity.evidence),
-      confidence: clampConfidence(entity.confidence, 0.7),
+      canonicalName: firstNonEmptyString([
+        entity.canonicalName,
+        properties.canonicalName,
+        properties.name,
+        properties.conditionName,
+        properties.genericName,
+      ]),
+      description: firstNonEmptyString([
+        entity.description,
+        properties.description,
+        properties.reason,
+        properties.mechanismOfAction,
+      ]),
+      evidence: firstNonEmptyString([
+        entity.evidence,
+        properties.evidence,
+        properties.effect,
+      ]),
+      confidence: clampConfidence(
+        entity.confidence ?? properties.confidence,
+        0.7,
+      ),
     };
 
     if (!entityRows.has(key)) {
       entityRows.set(key, row);
     }
 
-    const aliases = [idRaw, nameRaw, row.canonicalName]
-      .map((value) => (value ? toMetricSlug(value) : null))
+    const aliases = [
+      forcedId,
+      normalizedLlmId,
+      idRaw,
+      nameRaw,
+      row.canonicalName,
+      key,
+      properties.name,
+      properties.conditionName,
+      properties.genericName,
+      properties.displayName,
+      brandNames[0] ?? null,
+    ]
+      .map((value) => {
+        const parsed = toNullableString(value);
+        return parsed ? normalizeEntityId(parsed) : null;
+      })
       .filter((value): value is string => Boolean(value));
 
     for (const alias of aliases) {
@@ -279,21 +740,38 @@ function normalizeExtractedGraph(payload: unknown): {
   }
 
   const relationRows = new Map<string, GraphRelationRow>();
-  for (const relation of relationsInput) {
-    const sourceAlias = toNullableString(relation.sourceId);
-    const targetAlias = toNullableString(relation.targetId);
+  for (const relationLike of [...relationsInput, ...relationshipsInput]) {
+    const relation = toRecord(relationLike);
+    const relationProperties = toRecord(relation.properties);
+
+    const sourceAlias = firstNonEmptyString([
+      relation.sourceId,
+      relation.from_id,
+      relation.fromId,
+      relation.source,
+      relation.from,
+    ]);
+    const targetAlias = firstNonEmptyString([
+      relation.targetId,
+      relation.to_id,
+      relation.toId,
+      relation.target,
+      relation.to,
+    ]);
+
     if (!sourceAlias || !targetAlias) {
       continue;
     }
 
-    const sourceKey = aliasToKey.get(toMetricSlug(sourceAlias));
-    const targetKey = aliasToKey.get(toMetricSlug(targetAlias));
+    const sourceKey = aliasToKey.get(normalizeEntityId(sourceAlias));
+    const targetKey = aliasToKey.get(normalizeEntityId(targetAlias));
     if (!sourceKey || !targetKey || sourceKey === targetKey) {
       continue;
     }
 
     const relationType = normalizeGraphType(
-      toNullableString(relation.type) ?? "RELATED_TO",
+      firstNonEmptyString([relation.type, relation.relationType]) ??
+        "RELATED_TO",
       "RELATED_TO",
     );
 
@@ -301,8 +779,15 @@ function normalizeExtractedGraph(payload: unknown): {
       sourceKey,
       targetKey,
       relationType,
-      evidence: toNullableString(relation.evidence),
-      confidence: clampConfidence(relation.confidence, 0.7),
+      evidence: firstNonEmptyString([
+        relation.evidence,
+        relationProperties.evidence,
+        relationProperties.effect,
+      ]),
+      confidence: clampConfidence(
+        relation.confidence ?? relationProperties.confidence,
+        0.7,
+      ),
     };
 
     const rowKey = `${row.sourceKey}|${row.relationType}|${row.targetKey}`;
@@ -320,6 +805,10 @@ function normalizeExtractedGraph(payload: unknown): {
 async function extractGraphFromTextWithLlm(args: {
   documentId: string;
   documentTitle: string;
+  documentType: string | null;
+  patientDataType: string | null;
+  patientId: string | null;
+  visitDate: string | null;
   domain: string | null;
   sourceText: string;
 }): Promise<{ entities: GraphEntityRow[]; relations: GraphRelationRow[] }> {
@@ -329,98 +818,85 @@ async function extractGraphFromTextWithLlm(args: {
     return { entities: [], relations: [] };
   }
 
-  const extractionPrompt = `Extract a clinically meaningful knowledge graph from this medical context.
-Return ONLY JSON with this shape:
-{
-  "entities": [
-    {
-      "id": "short-id",
-      "name": "entity name",
-      "type": "DISEASE|DRUG|SYMPTOM|TEST|BIOMARKER|PROCEDURE|ANATOMY|RISK_FACTOR|DIAGNOSIS|TREATMENT|CONCEPT",
-      "canonicalName": "optional canonical text or null",
-      "description": "optional short description or null",
-      "evidence": "short evidence snippet from source or null",
-      "confidence": 0.0
-    }
-  ],
-  "relations": [
-    {
-      "sourceId": "entity id",
-      "targetId": "entity id",
-      "type": "TREATS|CAUSES|INDICATES|ASSOCIATED_WITH|CONTRAINDICATED_WITH|MEASURES|AFFECTS|PART_OF|RISK_FOR|INTERACTS_WITH|RELATED_TO",
-      "evidence": "short evidence snippet or null",
-      "confidence": 0.0
-    }
-  ]
-}
+  const patientNodeId = args.patientId ? `patient_${args.patientId}` : null;
+  const visitNodeId =
+    args.patientId && args.visitDate
+      ? `visit_${args.patientId}_${args.visitDate}`
+      : null;
 
-Rules:
-- Focus on graph-RAG useful semantics only.
-- Do not create parent/child chunk entities.
-- Do not output storage ids (chunk ids, document ids, vector ids) as entities.
-- Keep entities deduplicated and clinically meaningful.
-- Keep output compact for speed: at most 40 entities and 80 relations.
-- Use confidence in [0,1].`;
+  const promptKind = resolveGraphPromptKind({
+    domain: args.domain,
+    documentType: args.documentType,
+  });
+
+  const extractionPrompt = buildExtractionPrompt({
+    kind: promptKind,
+    patientNodeId,
+    visitNodeId: promptKind === "patient" ? null : visitNodeId,
+  });
 
   const userPayload = {
-    documentId: args.documentId,
-    title: args.documentTitle,
-    domain: args.domain,
-    sourceText: textSnippet,
+    documentMetadata: {
+      documentId: args.documentId,
+      title: args.documentTitle,
+      documentType: args.documentType,
+      patientDataType: args.patientDataType,
+      domain: args.domain,
+    },
+    systemMetadata: {
+      patientId: args.patientId,
+      visitDate: args.visitDate,
+      patientNodeId,
+      visitNodeId,
+    },
+    markdownContent: textSnippet,
   };
 
   const schema = {
     type: "object",
     additionalProperties: false,
     properties: {
-      entities: {
+      nodes: {
         type: "array",
         items: {
           type: "object",
           additionalProperties: false,
           properties: {
+            label: { type: "string" },
             id: { type: "string" },
-            name: { type: "string" },
-            type: { type: "string" },
-            canonicalName: { type: ["string", "null"] },
-            description: { type: ["string", "null"] },
-            evidence: { type: ["string", "null"] },
-            confidence: { type: "number" },
+            properties: {
+              type: "object",
+              additionalProperties: true,
+            },
           },
-          required: [
-            "id",
-            "name",
-            "type",
-            "canonicalName",
-            "description",
-            "evidence",
-            "confidence",
-          ],
+          required: ["label", "id", "properties"],
         },
       },
-      relations: {
+      relationships: {
         type: "array",
         items: {
           type: "object",
           additionalProperties: false,
           properties: {
-            sourceId: { type: "string" },
-            targetId: { type: "string" },
+            from_id: { type: "string" },
+            to_id: { type: "string" },
             type: { type: "string" },
-            evidence: { type: ["string", "null"] },
-            confidence: { type: "number" },
+            properties: {
+              type: "object",
+              additionalProperties: true,
+            },
           },
-          required: ["sourceId", "targetId", "type", "evidence", "confidence"],
+          required: ["from_id", "to_id", "type", "properties"],
         },
       },
     },
-    required: ["entities", "relations"],
+    required: ["nodes", "relationships"],
   };
 
   const responseFormat = {
     type: "json_schema" as const,
     json_schema: {
-      name: "clinical_graph_extraction",
+      name: `clinical_graph_extraction_${promptKind}`,
       strict: true,
       schema,
     },
@@ -442,7 +918,10 @@ Rules:
       return { entities: [], relations: [] };
     }
 
-    return normalizeExtractedGraph(parseJsonObject(content));
+    return normalizeExtractedGraph(parseJsonObject(content), {
+      patientNodeId,
+      visitNodeId,
+    });
   } catch (error) {
     console.error(
       "Primary KG extraction failed, trying fallback parse:",
@@ -451,7 +930,7 @@ Rules:
 
     const fallbackPayload = {
       ...userPayload,
-      sourceText: textSnippet.slice(0, KG_FALLBACK_SOURCE_TEXT_MAX_CHARS),
+      markdownContent: textSnippet.slice(0, KG_FALLBACK_SOURCE_TEXT_MAX_CHARS),
     };
 
     try {
@@ -473,7 +952,10 @@ Rules:
         return { entities: [], relations: [] };
       }
 
-      return normalizeExtractedGraph(parseJsonObject(fallbackContent));
+      return normalizeExtractedGraph(parseJsonObject(fallbackContent), {
+        patientNodeId,
+        visitNodeId,
+      });
     } catch (fallbackError) {
       console.error("Fallback KG extraction failed:", fallbackError);
       return { entities: [], relations: [] };
@@ -604,24 +1086,46 @@ export async function syncDocumentGraphFromSql(
       return false;
     }
 
-    const reportMarkdownBlocks = document.medicalReports
-      .map((report) => report.markdown?.trim() ?? "")
-      .filter((text) => text.length > 0);
-
     const documentMarkdown = extractMarkdownFromDocumentContent(
       document.content,
     ).trim();
 
-    const sourceText = [...reportMarkdownBlocks, documentMarkdown]
-      .filter((text) => text.trim().length > 0)
-      .join("\n\n---\n\n");
+    const isDomainDocument = document.type === "RAG";
+    const isCommentDocument =
+      document.type === "PATIENT" && document.patientDataType === "COMMENT";
+    const shouldExtractGraph = isDomainDocument || isCommentDocument;
 
-    const extractedGraph = await extractGraphFromTextWithLlm({
-      documentId: document.id,
-      documentTitle: document.title,
-      domain: document.ragSubtype?.toLowerCase() ?? null,
-      sourceText,
-    });
+    const patientIdForPrompt = document.user?.id ?? document.userId ?? null;
+    const visitDateForPrompt = toDateOnlyIso(
+      document.medicalReports.find((report) => report.reportDate !== null)
+        ?.reportDate ??
+        document.medicalReports[0]?.createdAt ??
+        document.createdAt,
+    );
+
+    let extractedGraph: {
+      entities: GraphEntityRow[];
+      relations: GraphRelationRow[];
+    } = {
+      entities: [],
+      relations: [],
+    };
+
+    if (shouldExtractGraph && documentMarkdown.length > 0) {
+      extractedGraph = await extractGraphFromTextWithLlm({
+        documentId: document.id,
+        documentTitle: document.title,
+        documentType: document.type,
+        patientDataType: document.patientDataType,
+        patientId: patientIdForPrompt,
+        visitDate: visitDateForPrompt,
+        domain: isDomainDocument
+          ? (document.ragSubtype?.toLowerCase() ?? null)
+          : null,
+        // Exclude report markdown to avoid duplicate LLM-observation extraction.
+        sourceText: documentMarkdown,
+      });
+    }
 
     const reports = document.medicalReports.map((report) => ({
       id: report.id,
@@ -776,28 +1280,72 @@ export async function syncDocumentGraphFromSql(
       }
 
       if (extractedGraph.entities.length > 0) {
-        await tx.run(
-          `
-          UNWIND $entities AS entity
-          MATCH (d:Document {id: $documentId})
-          MERGE (e:ClinicalEntity {key: entity.key})
-          ON CREATE SET e.createdAt = $syncTimestamp
-          SET e.name = entity.name,
-              e.type = entity.type,
-              e.canonicalName = entity.canonicalName,
-              e.description = entity.description,
-              e.updatedAt = $syncTimestamp
-          MERGE (d)-[mention:MENTIONS]->(e)
-          SET mention.evidence = entity.evidence,
-              mention.confidence = entity.confidence,
-              mention.updatedAt = $syncTimestamp
-          `,
-          {
-            documentId: document.id,
-            entities: extractedGraph.entities,
-            syncTimestamp,
-          },
+        const entitiesByLabel = new Map<string, GraphEntityRow[]>();
+        for (const entity of extractedGraph.entities) {
+          const label = toCypherEntityLabel(entity.type);
+          const existing = entitiesByLabel.get(label);
+          if (existing) {
+            existing.push(entity);
+            continue;
+          }
+
+          entitiesByLabel.set(label, [entity]);
+        }
+
+        for (const [label, entities] of entitiesByLabel) {
+          await tx.run(
+            `
+            UNWIND $entities AS entity
+            MATCH (d:Document {id: $documentId})
+            MERGE (e:ClinicalEntity {key: entity.key})
+            ON CREATE SET e.createdAt = $syncTimestamp
+            SET e:${label},
+                e.name = entity.name,
+                e.type = entity.type,
+                e.canonicalName = entity.canonicalName,
+                e.description = entity.description,
+                e.updatedAt = $syncTimestamp
+            MERGE (d)-[mention:MENTIONS]->(e)
+            SET mention.evidence = entity.evidence,
+                mention.confidence = entity.confidence,
+                mention.updatedAt = $syncTimestamp
+            `,
+            {
+              documentId: document.id,
+              entities,
+              syncTimestamp,
+            },
+          );
+        }
+      }
+
+      if (
+        document.userId &&
+        isCommentDocument &&
+        extractedGraph.entities.length > 0
+      ) {
+        const patientEntityKey = toEntityKeyFromId(
+          "PATIENT",
+          `patient_${document.userId}`,
         );
+
+        const hasPatientEntity = extractedGraph.entities.some(
+          (entity) => entity.key === patientEntityKey,
+        );
+
+        if (hasPatientEntity) {
+          await tx.run(
+            `
+            MATCH (p:Patient {id: $patientId})
+            MATCH (e:ClinicalEntity {key: $patientEntityKey})
+            MERGE (p)-[:HAS_CLINICAL_ENTITY]->(e)
+            `,
+            {
+              patientId: document.userId,
+              patientEntityKey,
+            },
+          );
+        }
       }
 
       if (extractedGraph.relations.length > 0) {
@@ -823,6 +1371,7 @@ export async function syncDocumentGraphFromSql(
         `
         MATCH (m:Metric)
         WHERE NOT (m)<-[:OF_METRIC]-()
+        WITH m LIMIT 500
         DETACH DELETE m
         `,
       );
@@ -831,6 +1380,7 @@ export async function syncDocumentGraphFromSql(
         `
         MATCH (e:ClinicalEntity)
         WHERE COUNT { (e)<-[:MENTIONS]-(:Document) } = 0
+        WITH e LIMIT 500
         DETACH DELETE e
         `,
       );
@@ -839,6 +1389,7 @@ export async function syncDocumentGraphFromSql(
         `
         MATCH (p:Patient)
         WHERE COUNT { (p)--() } = 0
+        WITH p LIMIT 500
         DETACH DELETE p
         `,
       );
@@ -847,6 +1398,7 @@ export async function syncDocumentGraphFromSql(
         `
         MATCH (domain:KnowledgeDomain)
         WHERE COUNT { (domain)--() } = 0
+        WITH domain LIMIT 500
         DETACH DELETE domain
         `,
       );
@@ -905,7 +1457,17 @@ export async function deleteDocumentGraph(
         `
         MATCH (m:Metric)
         WHERE NOT (m)<-[:OF_METRIC]-()
+        WITH m LIMIT 500
         DETACH DELETE m
+        `,
+      );
+
+      await tx.run(
+        `
+        MATCH (e:ClinicalEntity)
+        WHERE COUNT { (e)<-[:MENTIONS]-(:Document) } = 0
+        WITH e LIMIT 500
+        DETACH DELETE e
         `,
       );
 
@@ -913,6 +1475,7 @@ export async function deleteDocumentGraph(
         `
         MATCH (p:Patient)
         WHERE COUNT { (p)--() } = 0
+        WITH p LIMIT 500
         DETACH DELETE p
         `,
       );
@@ -921,6 +1484,7 @@ export async function deleteDocumentGraph(
         `
         MATCH (domain:KnowledgeDomain)
         WHERE COUNT { (domain)--() } = 0
+        WITH domain LIMIT 500
         DETACH DELETE domain
         `,
       );
@@ -1289,12 +1853,16 @@ export async function getDocumentKnowledgeGraphFromNeo4j(
         OPTIONAL MATCH (d)-[:HAS_REPORT]->(r:MedicalReport)
         OPTIONAL MATCH (r)-[:HAS_OBSERVATION]->(o:Observation)
         OPTIONAL MATCH (o)-[:OF_METRIC]->(m:Metric)
+        OPTIONAL MATCH (d)-[:MENTIONS]->(ce:ClinicalEntity)
+        OPTIONAL MATCH (ce)-[clinicalRel:RELATES_TO]->(:ClinicalEntity)
         RETURN d IS NOT NULL AS found,
                count(DISTINCT pc) AS parentChunks,
                count(DISTINCT cc) AS childChunks,
                count(DISTINCT r) AS reports,
                count(DISTINCT o) AS observations,
-               count(DISTINCT m) AS metrics
+               count(DISTINCT m) AS metrics,
+               count(DISTINCT ce) AS clinicalEntities,
+               count(DISTINCT clinicalRel) AS clinicalRelations
         `,
         { documentId },
       ),
@@ -1321,27 +1889,44 @@ export async function getDocumentKnowledgeGraphFromNeo4j(
     const reports = toNumber(summaryRecord.get("reports"));
     const observations = toNumber(summaryRecord.get("observations"));
     const metrics = toNumber(summaryRecord.get("metrics"));
+    const clinicalEntities = toNumber(summaryRecord.get("clinicalEntities"));
+    const clinicalRelations = toNumber(summaryRecord.get("clinicalRelations"));
 
     const sampleResult = await session.executeRead(async (tx) =>
       tx.run(
         `
         MATCH (d:Document {id: $documentId})
+        OPTIONAL MATCH (p:Patient)-[:OWNS_DOCUMENT]->(d)
         OPTIONAL MATCH (d)-[:HAS_PARENT_CHUNK]->(pc:ParentChunk)
         OPTIONAL MATCH (d)-[:HAS_PARENT_CHUNK]->(pc2:ParentChunk)-[:HAS_CHILD_CHUNK]->(cc:ChildChunk)
         OPTIONAL MATCH (d)-[:HAS_REPORT]->(r:MedicalReport)
         OPTIONAL MATCH (d)-[:HAS_REPORT]->(r2:MedicalReport)-[:HAS_OBSERVATION]->(o:Observation)
         OPTIONAL MATCH (d)-[:HAS_REPORT]->(:MedicalReport)-[:HAS_OBSERVATION]->(o2:Observation)-[:OF_METRIC]->(m:Metric)
+        OPTIONAL MATCH (d)-[:MENTIONS]->(ce:ClinicalEntity)
+        OPTIONAL MATCH (d)-[:MENTIONS]->(sourceCe:ClinicalEntity)-[ceRel:RELATES_TO]->(targetCe:ClinicalEntity)
+        WHERE targetCe IS NULL OR EXISTS {
+          MATCH (d)-[:MENTIONS]->(targetCe)
+        }
+        OPTIONAL MATCH (p)-[:HAS_CLINICAL_ENTITY]->(pce:ClinicalEntity)
+        WHERE pce IS NULL OR EXISTS {
+          MATCH (d)-[:MENTIONS]->(pce)
+        }
         RETURN d,
+               collect(DISTINCT p)[0..3] AS patientNodes,
                collect(DISTINCT pc)[0..3] AS parentChunkNodes,
                collect(DISTINCT cc)[0..5] AS childChunkNodes,
                collect(DISTINCT r)[0..3] AS reportNodes,
                collect(DISTINCT o)[0..5] AS observationNodes,
                collect(DISTINCT m)[0..5] AS metricNodes,
+               collect(DISTINCT ce)[0..10] AS clinicalEntityNodes,
                collect(DISTINCT {source: 'document:' + d.id, target: 'parent:' + pc.id, type: 'HAS_PARENT_CHUNK'}) +
                collect(DISTINCT {source: 'parent:' + pc2.id, target: 'child:' + cc.id, type: 'HAS_CHILD_CHUNK'}) +
                collect(DISTINCT {source: 'document:' + d.id, target: 'report:' + r.id, type: 'HAS_REPORT'}) +
                collect(DISTINCT {source: 'report:' + r2.id, target: 'observation:' + o.id, type: 'HAS_OBSERVATION'}) +
-               collect(DISTINCT {source: 'observation:' + o2.id, target: 'metric:' + m.slug, type: 'OF_METRIC'})
+               collect(DISTINCT {source: 'observation:' + o2.id, target: 'metric:' + m.slug, type: 'OF_METRIC'}) +
+               collect(DISTINCT {source: 'document:' + d.id, target: 'entity:' + ce.key, type: 'MENTIONS'}) +
+               collect(DISTINCT {source: 'entity:' + sourceCe.key, target: 'entity:' + targetCe.key, type: 'RELATES_TO:' + coalesce(ceRel.relationType, 'RELATED_TO')}) +
+               collect(DISTINCT {source: 'patient:' + p.id, target: 'entity:' + pce.key, type: 'HAS_CLINICAL_ENTITY'})
                AS sampleEdges
         `,
         { documentId },
@@ -1360,6 +1945,17 @@ export async function getDocumentKnowledgeGraphFromNeo4j(
           getNodeProp(documentNode, "title") ??
           `Document ${getNodeProp(documentNode, "id") ?? documentId}`,
       });
+
+      for (const node of toNodeArray(sampleRecord.get("patientNodes"))) {
+        sampleNodes.push({
+          id: `patient:${getNodeProp(node, "id") ?? "unknown"}`,
+          type: "Patient",
+          label:
+            getNodeProp(node, "name") ??
+            getNodeProp(node, "email") ??
+            `Patient ${getNodeProp(node, "id") ?? "unknown"}`,
+        });
+      }
 
       for (const node of toNodeArray(sampleRecord.get("parentChunkNodes"))) {
         sampleNodes.push({
@@ -1408,6 +2004,19 @@ export async function getDocumentKnowledgeGraphFromNeo4j(
             "Metric",
         });
       }
+
+      for (const node of toNodeArray(sampleRecord.get("clinicalEntityNodes"))) {
+        const entityKey = getNodeProp(node, "key") ?? "unknown";
+        const entityType = getNodeProp(node, "type") ?? "ClinicalEntity";
+        sampleNodes.push({
+          id: `entity:${entityKey}`,
+          type: entityType,
+          label:
+            getNodeProp(node, "name") ??
+            getNodeProp(node, "canonicalName") ??
+            entityKey,
+        });
+      }
     }
 
     const dedupedNodes = Array.from(
@@ -1426,9 +2035,21 @@ export async function getDocumentKnowledgeGraphFromNeo4j(
       : [];
 
     const totalNodes =
-      1 + parentChunks + childChunks + reports + observations + metrics;
+      1 +
+      parentChunks +
+      childChunks +
+      reports +
+      observations +
+      metrics +
+      clinicalEntities;
     const totalEdges =
-      parentChunks + childChunks + reports + observations + observations;
+      parentChunks +
+      childChunks +
+      reports +
+      observations +
+      metrics +
+      clinicalEntities +
+      clinicalRelations;
 
     return {
       enabled: true,
@@ -1864,10 +2485,16 @@ export async function searchGraphContextInNeo4j(
           : null;
 
         evidenceMap.set(observationIdRaw, {
+          kind: "observation",
           id: observationIdRaw,
           patientId: patientIdRaw,
           patientName: getNodeProp(patientValue, "name"),
           reportId: reportIdRaw,
+          documentId: isNeo4jNode(documentValue)
+            ? getNodeProp(documentValue, "id")
+            : null,
+          relationType: null,
+          linkedEntityKey: null,
           documentTitle,
           reportDate: getNodeProp(reportValue, "reportDate"),
           hospitalName: getNodeProp(reportValue, "hospitalName"),
@@ -2061,10 +2688,14 @@ export async function searchGraphContextInNeo4j(
           const evidenceId = `${documentIdRaw}:${entityKeyRaw}:${linkedKey}:${relationType}`;
           if (!semanticEvidenceMap.has(evidenceId)) {
             semanticEvidenceMap.set(evidenceId, {
+              kind: "clinical",
               id: evidenceId,
-              patientId: documentIdRaw,
+              patientId: null,
               patientName: documentTitle,
-              reportId: relationType,
+              reportId: null,
+              documentId: documentIdRaw,
+              relationType,
+              linkedEntityKey: linkedKey,
               documentTitle,
               reportDate: null,
               hospitalName: isNeo4jNode(domainValue)
@@ -2083,10 +2714,14 @@ export async function searchGraphContextInNeo4j(
       const mentionEvidenceId = `${documentIdRaw}:${entityKeyRaw}:MENTION`;
       if (!semanticEvidenceMap.has(mentionEvidenceId)) {
         semanticEvidenceMap.set(mentionEvidenceId, {
+          kind: "clinical",
           id: mentionEvidenceId,
-          patientId: documentIdRaw,
+          patientId: null,
           patientName: documentTitle,
-          reportId: "MENTIONS",
+          reportId: null,
+          documentId: documentIdRaw,
+          relationType: "MENTIONS",
+          linkedEntityKey: entityKeyRaw,
           documentTitle,
           reportDate: null,
           hospitalName: isNeo4jNode(domainValue)
@@ -2114,14 +2749,12 @@ export async function searchGraphContextInNeo4j(
       edges: semanticEdges.slice(0, 300),
       evidence: semanticEvidence,
       stats: {
-        patients: semanticNodes.filter((node) => node.type === "Document")
-          .length,
-        reports: semanticNodes.filter((node) => node.type === "KnowledgeDomain")
-          .length,
+        patients: 0,
+        reports: 0,
         observations: semanticNodes.filter(
           (node) => node.type === "ClinicalEntity",
         ).length,
-        metrics: semanticEdges.length,
+        metrics: 0,
         totalNodes: semanticNodes.length,
         totalEdges: semanticEdges.length,
       },

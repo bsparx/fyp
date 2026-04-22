@@ -276,31 +276,31 @@ export default function UploadPage() {
 
     return (
         <>
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-                <div className="flex items-center gap-2 px-4">
-                    <SidebarTrigger className="-ml-1" />
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#e5e0d8] bg-[#fdfcf9]">
+                <div className="flex items-center gap-2 px-6">
+                    <SidebarTrigger className="-ml-1 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/40" />
                     <Separator
                         orientation="vertical"
-                        className="mr-2 data-[orientation=vertical]:h-4"
+                        className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]"
                     />
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                                <BreadcrumbLink href="/dashboard" className="text-[#8a8279] hover:text-[#3d3630]">Dashboard</BreadcrumbLink>
                             </BreadcrumbItem>
-                            <BreadcrumbSeparator className="hidden md:block" />
+                            <BreadcrumbSeparator className="hidden md:block text-[#e5e0d8]" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Upload PDFs</BreadcrumbPage>
+                                <BreadcrumbPage className="text-[#3d3630] font-medium">Upload PDFs</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
                 </div>
             </header>
 
-            <div className="flex flex-1 flex-col gap-6 p-6 pt-0">
+            <div className="flex flex-1 flex-col gap-6 p-6 pt-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Upload Documents</h1>
-                    <p className="text-muted-foreground mt-2">
+                    <h1 className="text-2xl font-bold tracking-tight text-[#3d3630]">Upload Documents</h1>
+                    <p className="text-[#8a8279] mt-1 text-sm">
                         Upload PDF documents to be processed and stored in the semantic vector database.
                     </p>
                 </div>
@@ -502,9 +502,9 @@ export default function UploadPage() {
                 </form>
 
                 {/* Info Section */}
-                <div className="rounded-xl border bg-muted/50 p-6">
-                    <h3 className="font-semibold mb-2">About Document Processing</h3>
-                    <ul className="text-sm text-muted-foreground space-y-2">
+                <div className="rounded-xl border border-[#e5e0d8] bg-[#faf6f1]/60 p-6">
+                    <h3 className="font-semibold mb-2 text-[#3d3630]">About Document Processing</h3>
+                    <ul className="text-sm text-[#8a8279] space-y-2">
                         <li>• PDFs will be parsed and converted to text using AI vision models</li>
                         <li>• Text will be split into chunks for optimal retrieval</li>
                         <li>• Chunks will be embedded using Voyage AI and stored in Pinecone</li>

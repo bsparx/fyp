@@ -726,7 +726,9 @@ export async function getAllUsersWithDocumentCount() {
   try {
     const users = await prisma.user.findMany({
       where: {
-        role: "PATIENT",
+        role: {
+          in: ["PATIENT", "DOCTOR"],
+        },
       },
       select: {
         id: true,

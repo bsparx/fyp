@@ -69,32 +69,32 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
     return (
         <>
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-                <div className="flex items-center gap-2 px-4">
-                    <SidebarTrigger className="-ml-1" />
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#e5e0d8] bg-[#fdfcf9]">
+                <div className="flex items-center gap-2 px-6">
+                    <SidebarTrigger className="-ml-1 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/40" />
                     <Separator
                         orientation="vertical"
-                        className="mr-2 data-[orientation=vertical]:h-4"
+                        className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]"
                     />
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                                <BreadcrumbLink href="/dashboard" className="text-[#8a8279] hover:text-[#3d3630]">Dashboard</BreadcrumbLink>
                             </BreadcrumbItem>
-                            <BreadcrumbSeparator className="hidden md:block" />
+                            <BreadcrumbSeparator className="hidden md:block text-[#e5e0d8]" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>All Users</BreadcrumbPage>
+                                <BreadcrumbPage className="text-[#3d3630] font-medium">All Users</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
                 </div>
             </header>
 
-            <div className="flex flex-1 flex-col gap-6 p-6 pt-0">
+            <div className="flex flex-1 flex-col gap-6 p-6 pt-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
-                        <p className="text-muted-foreground mt-1">
+                        <h1 className="text-2xl font-bold tracking-tight text-[#3d3630]">User Management</h1>
+                        <p className="text-[#8a8279] mt-1 text-sm">
                             Manage and monitor all users in your hospital system.
                         </p>
                     </div>
