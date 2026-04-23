@@ -732,6 +732,7 @@ export async function getAllUsersWithDocumentCount() {
       },
       select: {
         id: true,
+        clerkId: true,
         name: true,
         email: true,
         role: true,
@@ -749,6 +750,7 @@ export async function getAllUsersWithDocumentCount() {
 
     return users.map((user) => ({
       id: user.id,
+      clerkId: user.clerkId,
       name: user.name,
       email: user.email,
       role: user.role as "ADMIN" | "DOCTOR" | "PATIENT",
@@ -760,6 +762,141 @@ export async function getAllUsersWithDocumentCount() {
   } catch (error) {
     console.error("Error fetching users with document count:", error);
     return [];
+  }
+}
+
+export interface EditUserResult {
+  success: boolean;
+  message: string;
+  user?: {
+    id: string;
+    clerkId: string;
+    email: string;
+    name: string | null;
+    role: Role;
+  };
+}
+
+export async function editUser(
+  userId: string,
+  clerkId: string,
+  name: string,
+  email: string,
+  role: string,
+): Promise<EditUserResult> {
+  if (!userId || !clerkId || !name || !email || !role) {
+    return { success: false, message: "Missing required fields" };
+  }
+
+  if (!["ADMIN", "DOCTOR", "PATIENT"].includes(role)) {
+    return {
+      success: false,
+      message: "Invalid role. Must be ADMIN, DOCTOR, or PATIENT",
+    };
+  }
+
+  try {
+    const clerk = await clerkClient();
+
+    await clerk.users.updateUser(clerkId, {
+      username: name,
+      publicMetadata: {
+        role: role,
+      },
+    });
+
+    const dbUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name,
+        email,
+        role: role as Role,
+      },
+    });
+
+    revalidatePath("/dashboard/users");
+
+    return {
+      success: true,
+      message: "User updated successfully",
+      user: {
+        id: dbUser.id,
+        clerkId: dbUser.clerkId,
+        email: dbUser.email,
+        name: dbUser.name,
+        role: dbUser.role,
+      },
+    };
+  } catch (error: unknown) {
+    console.error("Error editing user:", error);
+
+    if (error && typeof error === "object" && "errors" in error) {
+      const clerkError = error as {
+        errors: Array<{ message: string; code: string }>;
+      };
+      return {
+        success: false,
+        message:
+          clerkError.errors[0]?.message || "Failed to update user in Clerk",
+      };
+    }
+
+    if (error && typeof error === "object" && "code" in error) {
+      const prismaError = error as { code: string };
+      if (prismaError.code === "P2002") {
+        return {
+          success: false,
+          message: "A user with this email already exists",
+        };
+      }
+    }
+
+    return { success: false, message: "Internal server error" };
+  }
+}
+
+export interface DeleteUserResult {
+  success: boolean;
+  message: string;
+}
+
+export async function deleteUser(
+  userId: string,
+  clerkId: string,
+): Promise<DeleteUserResult> {
+  if (!userId || !clerkId) {
+    return { success: false, message: "Missing required fields" };
+  }
+
+  try {
+    const clerk = await clerkClient();
+    await clerk.users.deleteUser(clerkId);
+
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+
+    revalidatePath("/dashboard/users");
+
+    return {
+      success: true,
+      message: "User deleted successfully",
+    };
+  } catch (error: unknown) {
+    console.error("Error deleting user:", error);
+
+    if (error && typeof error === "object" && "errors" in error) {
+      const clerkError = error as {
+        errors: Array<{ message: string; code: string }>;
+      };
+      return {
+        success: false,
+        message:
+          clerkError.errors[0]?.message || "Failed to delete user from Clerk",
+      };
+    }
+
+    return { success: false, message: "Internal server error" };
   }
 }
 

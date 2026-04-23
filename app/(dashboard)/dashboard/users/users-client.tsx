@@ -17,7 +17,6 @@ import { Input } from "@/components/ui/input"
 import {
     Search,
     Plus,
-    MoreHorizontal,
     Mail,
     Shield,
     Calendar,
@@ -25,7 +24,13 @@ import {
     ChevronRight,
     Loader2,
     RefreshCw,
+    Pencil,
+    Trash2,
 } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { editUser, deleteUser } from "./data/actions"
 
 export interface User {
     id: string
@@ -52,6 +57,15 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
     const [currentPage, setCurrentPage] = useState(1)
     const itemsPerPage = 5
 
+    const [editUserData, setEditUserData] = useState<User | null>(null)
+    const [editName, setEditName] = useState("")
+    const [editEmail, setEditEmail] = useState("")
+    const [editRole, setEditRole] = useState<"ADMIN" | "DOCTOR" | "PATIENT">("PATIENT")
+    const [editLoading, setEditLoading] = useState(false)
+
+    const [deleteUserData, setDeleteUserData] = useState<User | null>(null)
+    const [deleteLoading, setDeleteLoading] = useState(false)
+
     const filteredUsers = users.filter(
         (user) =>
             (user.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
@@ -65,6 +79,68 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
     const handleRefresh = () => {
         window.location.reload()
+    }
+
+    const openEditDialog = (user: User) => {
+        setEditUserData(user)
+        setEditName(user.name || "")
+        setEditEmail(user.email)
+        setEditRole(user.role)
+    }
+
+    const closeEditDialog = () => {
+        setEditUserData(null)
+        setEditName("")
+        setEditEmail("")
+        setEditRole("PATIENT")
+        setEditLoading(false)
+    }
+
+    const handleEditSubmit = async () => {
+        if (!editUserData) return
+        setEditLoading(true)
+        const result = await editUser(
+            editUserData.id,
+            editUserData.clerkId,
+            editName,
+            editEmail,
+            editRole
+        )
+        if (result.success && result.user) {
+            setUsers((prev) =>
+                prev.map((u) =>
+                    u.id === result.user!.id
+                        ? { ...u, name: result.user!.name, email: result.user!.email, role: result.user!.role }
+                        : u
+                )
+            )
+            closeEditDialog()
+        } else {
+            alert(result.message)
+            setEditLoading(false)
+        }
+    }
+
+    const openDeleteDialog = (user: User) => {
+        setDeleteUserData(user)
+    }
+
+    const closeDeleteDialog = () => {
+        setDeleteUserData(null)
+        setDeleteLoading(false)
+    }
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteUserData) return
+        setDeleteLoading(true)
+        const result = await deleteUser(deleteUserData.id, deleteUserData.clerkId)
+        if (result.success) {
+            setUsers((prev) => prev.filter((u) => u.id !== deleteUserData.id))
+            closeDeleteDialog()
+        } else {
+            alert(result.message)
+            setDeleteLoading(false)
+        }
     }
 
     return (
@@ -217,9 +293,14 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                                                 </span>
                                             </td>
                                             <td className="p-4 text-right">
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button variant="ghost" size="icon" onClick={() => openEditDialog(user)}>
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600" onClick={() => openDeleteDialog(user)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
@@ -258,6 +339,75 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                     )}
                 </div>
             </div>
+
+            {/* Edit User Dialog */}
+            <Dialog open={!!editUserData} onOpenChange={(open) => !open && closeEditDialog()}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Edit User</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <span className="text-sm font-medium">Username</span>
+                            <Input
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                placeholder="Enter username"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <span className="text-sm font-medium">Email</span>
+                            <Input
+                                type="email"
+                                value={editEmail}
+                                onChange={(e) => setEditEmail(e.target.value)}
+                                placeholder="Enter email"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <span className="text-sm font-medium">Role</span>
+                            <Select value={editRole} onValueChange={(value) => setEditRole(value as "ADMIN" | "DOCTOR" | "PATIENT")}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="PATIENT">Patient</SelectItem>
+                                    <SelectItem value="DOCTOR">Doctor</SelectItem>
+                                    <SelectItem value="ADMIN">Admin</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeEditDialog} disabled={editLoading}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleEditSubmit} disabled={editLoading}>
+                            {editLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save Changes
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete User Alert Dialog */}
+            <AlertDialog open={!!deleteUserData} onOpenChange={(open) => !open && closeDeleteDialog()}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete <strong>{deleteUserData?.name || deleteUserData?.email}</strong> from both the database and Clerk. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={closeDeleteDialog} disabled={deleteLoading}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} disabled={deleteLoading} className="bg-red-600 hover:bg-red-700">
+                            {deleteLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     )
 }

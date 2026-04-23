@@ -128,7 +128,7 @@ const kgExtractorClient = new OpenAI({
   baseURL: KG_EXTRACTOR_BASE_URL,
   apiKey: KG_EXTRACTOR_API_KEY,
   maxRetries: 1,
-  timeout: 180_000,
+  timeout: 3000000, // 50 minutes
 });
 
 let graphDriver: Driver | null = null;
@@ -912,8 +912,9 @@ async function extractGraphFromTextWithLlm(args: {
       ],
       response_format: responseFormat,
     });
-
+    console.log(completion);
     const content = completion.choices[0]?.message?.content;
+    console.log(content);
     if (!content) {
       return { entities: [], relations: [] };
     }
