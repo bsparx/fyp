@@ -4,8 +4,11 @@ import prisma from "@/utils/db";
 import { revalidatePath } from "next/cache";
 import { processSingleUserDataFile } from "@/utils/userDataProcessing";
 import { embedAndStorePatientDocument } from "@/utils/embeddings";
-import { extractReportDataWithAI } from "@/utils/reportExtractor";
-import cloudinary from "@/utils/cloudinary";
+import {
+  extractReportDataWithAI,
+  extractReportMetadataOnly,
+} from "@/utils/reportExtractor";
+import { uploadFileToCloudinary } from "@/utils/cloudinaryUpload";
 import { clerkClient } from "@clerk/nextjs/server";
 import { Role } from "@/app/generated/prisma/enums";
 import type { Prisma } from "@/app/generated/prisma/client";
@@ -246,47 +249,6 @@ function enrichExtractionWithTextFallback(
   };
 }
 
-function canUploadToCloudinary(): boolean {
-  return Boolean(
-    process.env.CLOUD_NAME &&
-    process.env.CLOUDINARY_API_KEY &&
-    process.env.CLOUDINARY_API_SECRET,
-  );
-}
-
-async function uploadReportFileToCloudinary(args: {
-  dataUri: string;
-  fileType: "pdf" | "image";
-  userId: string;
-  documentId: string;
-}): Promise<string | null> {
-  if (!canUploadToCloudinary()) {
-    console.warn(
-      "Cloudinary environment variables are not fully configured. Skipping report upload.",
-    );
-    return null;
-  }
-
-  try {
-    const uploadResult = await cloudinary.uploader.upload(args.dataUri, {
-      resource_type: args.fileType === "pdf" ? "raw" : "image",
-      folder: `medical_reports/${args.userId}`,
-      public_id: `report_${args.documentId}_${Date.now()}${
-        args.fileType === "pdf" ? ".pdf" : ""
-      }`,
-    });
-
-    console.log(`Uploaded file to Cloudinary: ${uploadResult.secure_url}`);
-    return uploadResult.secure_url;
-  } catch (error) {
-    console.error(
-      "Cloudinary upload failed. Continuing without reportURL.",
-      error,
-    );
-    return null;
-  }
-}
-
 export type PatientDataType = "REPORT" | "COMMENT";
 
 /**
@@ -393,7 +355,18 @@ export async function uploadUserDocument(
         });
 
         if (dataType === "COMMENT") {
-          // COMMENT type: OCR and embed each file separately
+          // COMMENT type: Extract metadata, upload to Cloudinary, create Document + MedicalReport, and embed as a single chunk
+          const fileType: "pdf" | "image" = file.type.includes("pdf")
+            ? "pdf"
+            : "image";
+
+          // Extract hospital name and report date from first page image only
+          const extractedData = await extractReportMetadataOnly(
+            file.base64,
+            fileType,
+          );
+
+          // Create document record first (needed for Cloudinary public_id)
           const document = await prisma.document.create({
             data: {
               title: fileTitle,
@@ -409,6 +382,32 @@ export async function uploadUserDocument(
             `Created comment document record: ${document.id} for file ${file.name}`,
           );
 
+          // Upload the file to Cloudinary
+          const mimeType =
+            file.type === "pdf" ? "application/pdf" : "image/png";
+          const dataUri = `data:${mimeType};base64,${file.base64}`;
+          const reportURL = await uploadFileToCloudinary({
+            dataUri,
+            fileType,
+            folder: `medical_reports/${verifiedUserId}`,
+            publicId: `report_${document.id}_${Date.now()}${
+              fileType === "pdf" ? ".pdf" : ""
+            }`,
+          });
+
+          // Persist report metadata (hospital name, report date, URL) in SQL for each entry
+          const reportDate = parseExtractedReportDate(extractedData.reportDate);
+          await prisma.medicalReport.create({
+            data: {
+              documentId: document.id,
+              userId: verifiedUserId,
+              hospitalName: extractedData.hospitalName,
+              reportDate,
+              reportURL,
+              markdown: extractedText,
+            },
+          });
+
           const graphSynced = await syncDocumentGraphFromSql(document.id);
           if (!graphSynced) {
             console.warn(
@@ -416,12 +415,29 @@ export async function uploadUserDocument(
             );
           }
 
-          // Embed and store in Pinecone with patient metadata (run in background)
+          // Build header prefix with report date and hospital name for vector ingestion
+          const headerPrefix = [
+            extractedData.reportDate
+              ? `Report Date: ${extractedData.reportDate}`
+              : null,
+            extractedData.hospitalName
+              ? `Hospital: ${extractedData.hospitalName}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join("\n") || undefined;
+
+          // Embed and store in Pinecone as a single parent chunk with the header prepended
           embedAndStorePatientDocument(
             document.id,
             extractedText,
             fileTitle,
             verifiedUserId,
+            {
+              singleChunk: true,
+              headerPrefix,
+              reportDate: extractedData.reportDate ?? undefined,
+            },
           )
             .then((success) => {
               if (success) {
@@ -483,11 +499,13 @@ export async function uploadUserDocument(
             file.type === "pdf" ? "application/pdf" : "image/png";
           const dataUri = `data:${mimeType};base64,${file.base64}`;
 
-          const reportURL = await uploadReportFileToCloudinary({
+          const reportURL = await uploadFileToCloudinary({
             dataUri,
             fileType,
-            userId: verifiedUserId,
-            documentId: document.id,
+            folder: `medical_reports/${verifiedUserId}`,
+            publicId: `report_${document.id}_${Date.now()}${
+              fileType === "pdf" ? ".pdf" : ""
+            }`,
           });
 
           // Phase 2: Persist report envelope + structured metric rows in one transaction.
@@ -723,11 +741,17 @@ export async function getUserDocuments(
   }
 }
 export async function getAllUsersWithDocumentCount() {
+  return getUsersWithDocumentCountByRoles(["ADMIN", "DOCTOR", "PATIENT"]);
+}
+
+export async function getUsersWithDocumentCountByRoles(
+  roles: ("ADMIN" | "DOCTOR" | "PATIENT")[],
+) {
   try {
     const users = await prisma.user.findMany({
       where: {
         role: {
-          in: ["PATIENT", "DOCTOR"],
+          in: roles,
         },
       },
       select: {
@@ -1000,6 +1024,9 @@ export interface DocumentDetails {
     type: string;
     url: string;
   }>;
+  reportURL: string | null;
+  hospitalName: string | null;
+  reportDate: string | null;
 }
 
 /**
@@ -1009,21 +1036,30 @@ export async function getDocumentDetails(
   documentId: string,
 ): Promise<DocumentDetails | null> {
   try {
-    const [document, parentChunksCount, childChunksCount] = await Promise.all([
-      prisma.document.findUnique({
-        where: { id: documentId },
-        select: {
-          id: true,
-          content: true,
-        },
-      }),
-      prisma.parentChunk.count({
-        where: { documentId },
-      }),
-      prisma.ragChunk.count({
-        where: { documentId },
-      }),
-    ]);
+    const [document, parentChunksCount, childChunksCount, medicalReport] =
+      await Promise.all([
+        prisma.document.findUnique({
+          where: { id: documentId },
+          select: {
+            id: true,
+            content: true,
+          },
+        }),
+        prisma.parentChunk.count({
+          where: { documentId },
+        }),
+        prisma.ragChunk.count({
+          where: { documentId },
+        }),
+        prisma.medicalReport.findFirst({
+          where: { documentId },
+          select: {
+            reportURL: true,
+            hospitalName: true,
+            reportDate: true,
+          },
+        }),
+      ]);
 
     if (!document) {
       return null;
@@ -1047,6 +1083,9 @@ export async function getDocumentDetails(
       parentChunks: parentChunksCount,
       childChunks: childChunksCount,
       files,
+      reportURL: medicalReport?.reportURL ?? null,
+      hospitalName: medicalReport?.hospitalName ?? null,
+      reportDate: medicalReport?.reportDate?.toISOString() ?? null,
     };
   } catch (error) {
     console.error("Error fetching document details:", error);

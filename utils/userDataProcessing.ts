@@ -320,7 +320,8 @@ export async function processSingleUserDataFile(file: {
   console.log(`Processing single file: ${file.name} (${file.type})`);
 
   if (file.type === "pdf") {
-    return await processPdfAndConvertToText([file.base64]);
+    const result = await processPdfAndConvertToText([file.base64]);
+    return result?.text ?? null;
   }
 
   if (file.type === "image") {

@@ -28,6 +28,8 @@ model Document {
   title           String
   content         String
   pdfUrl          String?
+  hospitalName    String?
+  reportDate      DateTime?
   type            DocumentType     @default(RAG)
   ragSubtype      RagSubtype?
   patientDataType PatientDataType?

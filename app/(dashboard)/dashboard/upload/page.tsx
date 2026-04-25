@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useTransition } from "react"
+import { toast } from "sonner"
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -12,6 +13,8 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Progress } from "@/components/ui/progress"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import {
     FileText,
     X,
@@ -20,6 +23,9 @@ import {
     GripVertical,
     Pill,
     Activity,
+    Info,
+    CheckCircle2,
+    AlertCircle,
 } from "lucide-react"
 import {
     DndContext,
@@ -58,15 +64,7 @@ function SortablePdfItem({
     onRemove: (id: string) => void
     isPending: boolean
 }) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({ id: item.id })
-
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
@@ -77,35 +75,40 @@ function SortablePdfItem({
         <div
             ref={setNodeRef}
             style={style}
-            className={`flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-600 ${isDragging ? 'shadow-lg dark:shadow-slate-900/50' : ''}`}
+            className={`flex items-center gap-3 p-3 bg-[#fdfcf9] rounded-lg border border-[#e5e0d8] ${isDragging ? 'shadow-lg' : ''} transition-shadow`}
         >
             <button
                 type="button"
                 {...attributes}
                 {...listeners}
-                className="cursor-grab active:cursor-grabbing text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                className="cursor-grab active:cursor-grabbing text-[#8a8279] hover:text-[#3d3630] transition-colors"
                 disabled={isPending}
             >
                 <GripVertical size={20} />
             </button>
-            <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
+            <div className="rounded-lg bg-[#f0e6c8]/40 p-2 shrink-0">
+                <FileText className="h-5 w-5 text-[#8b7355]" />
+            </div>
             <div className="flex-1 min-w-0">
-                <p className="font-medium text-slate-800 dark:text-slate-100 truncate text-sm">
+                <p className="font-medium text-[#3d3630] truncate text-sm">
                     {item.file.name}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-[#8a8279]">
                     {(item.file.size / 1024 / 1024).toFixed(2)} MB
                 </p>
             </div>
             {item.progress < 100 && (
-                <div className="w-16">
-                    <Progress value={item.progress} className="h-1.5 dark:bg-slate-700" />
+                <div className="w-20">
+                    <Progress value={item.progress} className="h-1.5 bg-[#e8e4e0]" />
                 </div>
+            )}
+            {item.progress === 100 && (
+                <CheckCircle2 className="size-4 text-[#8fa68e] shrink-0" />
             )}
             <button
                 type="button"
                 onClick={() => onRemove(item.id)}
-                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-500/20 transition-colors"
+                className="text-[#c4705a] hover:text-red-600 p-1.5 rounded-full hover:bg-red-50 transition-colors shrink-0"
                 disabled={isPending}
             >
                 <X size={16} />
@@ -114,20 +117,19 @@ function SortablePdfItem({
     )
 }
 
+import { PageTitle } from "@/components/page-title"
+
 export default function UploadPage() {
     const [pdfFiles, setPdfFiles] = useState<PdfFileItem[]>([])
     const [isPending, startTransition] = useTransition()
     const [isProcessing, setIsProcessing] = useState(false)
-    const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null)
     const [documentTitle, setDocumentTitle] = useState("")
     const [documentType, setDocumentType] = useState<"MEDICINE" | "DISEASE">("MEDICINE")
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const sensors = useSensors(
         useSensor(PointerSensor),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     )
 
     const fileToBase64 = (file: File): Promise<string> => {
@@ -136,9 +138,7 @@ export default function UploadPage() {
             reader.readAsDataURL(file)
             reader.onload = () => {
                 const result = reader.result as string
-                // Remove the data:application/pdf;base64, prefix
-                const base64 = result.split(',')[1]
-                resolve(base64)
+                resolve(result.split(',')[1])
             }
             reader.onerror = (error) => reject(error)
         })
@@ -149,20 +149,18 @@ export default function UploadPage() {
         const validFiles = files.filter(file => file.type === 'application/pdf')
 
         if (validFiles.length !== files.length) {
-            setMessage({ error: true, text: "Some files were skipped. Only PDF files are allowed." })
+            toast.warning("Some files were skipped", { description: "Only PDF files are allowed." })
         }
 
         const remainingSlots = MAX_PDF_FILES - pdfFiles.length
-
         if (remainingSlots <= 0) {
-            setMessage({ error: true, text: `Maximum of ${MAX_PDF_FILES} PDFs already reached.` })
+            toast.error("Maximum reached", { description: `Maximum of ${MAX_PDF_FILES} PDFs already reached.` })
             return
         }
 
         const filesToAdd = validFiles.slice(0, remainingSlots)
-
         if (validFiles.length > remainingSlots) {
-            setMessage({ error: true, text: `Only the first ${remainingSlots} file(s) were added. Maximum is ${MAX_PDF_FILES} PDFs total.` })
+            toast.info("Files truncated", { description: `Only the first ${remainingSlots} file(s) were added.` })
         }
 
         const newPdfItems: PdfFileItem[] = filesToAdd.map((file) => ({
@@ -173,45 +171,36 @@ export default function UploadPage() {
 
         setPdfFiles(prev => [...prev, ...newPdfItems])
 
-        // Convert files to base64 and simulate progress
         for (const item of newPdfItems) {
             let progress = 0
             const interval = setInterval(() => {
                 progress += 10
                 if (progress <= 90) {
-                    setPdfFiles(prev =>
-                        prev.map(f => f.id === item.id ? { ...f, progress } : f)
-                    )
+                    setPdfFiles(prev => prev.map(f => f.id === item.id ? { ...f, progress } : f))
                 }
             }, 50)
 
             try {
                 const base64 = await fileToBase64(item.file)
                 clearInterval(interval)
-                setPdfFiles(prev =>
-                    prev.map(f => f.id === item.id ? { ...f, progress: 100, base64 } : f)
-                )
+                setPdfFiles(prev => prev.map(f => f.id === item.id ? { ...f, progress: 100, base64 } : f))
             } catch (error) {
                 clearInterval(interval)
                 console.error("Error converting file to base64:", error)
                 setPdfFiles(prev => prev.filter(f => f.id !== item.id))
-                setMessage({ error: true, text: `Failed to process ${item.file.name}` })
+                toast.error("Processing failed", { description: `Failed to process ${item.file.name}` })
             }
         }
 
-        if (fileInputRef.current) {
-            fileInputRef.current.value = ''
-        }
+        if (fileInputRef.current) fileInputRef.current.value = ''
     }
 
     const handleRemoveFile = (id: string) => {
         setPdfFiles(prev => prev.filter(f => f.id !== id))
-        setMessage(null)
     }
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event
-
         if (over && active.id !== over.id) {
             setPdfFiles((items) => {
                 const oldIndex = items.findIndex(item => item.id === active.id)
@@ -225,47 +214,51 @@ export default function UploadPage() {
         e.preventDefault()
 
         if (pdfFiles.length === 0) {
-            setMessage({ error: true, text: "Please select at least one PDF file." })
+            toast.error("No files selected", { description: "Please select at least one PDF file." })
             return
         }
-
         if (!documentTitle.trim()) {
-            setMessage({ error: true, text: "Please enter a document title." })
+            toast.error("Title required", { description: "Please enter a document title." })
             return
         }
 
-        // Check if all files have been processed to base64
         const allProcessed = pdfFiles.every(f => f.base64 && f.progress === 100)
         if (!allProcessed) {
-            setMessage({ error: true, text: "Please wait for all files to finish processing." })
+            toast.error("Processing incomplete", { description: "Please wait for all files to finish processing." })
             return
         }
 
         setIsProcessing(true)
-        setMessage(null)
+        const toastId = toast.loading(`Uploading ${pdfFiles.length} document(s)...`)
 
         startTransition(async () => {
             try {
                 const formData = new FormData()
                 formData.set("title", documentTitle.trim())
                 formData.set("ragSubtype", documentType)
-
-                // Send base64 data as JSON array (in order)
-                const pdfBase64Array = pdfFiles.map(f => f.base64!)
-                formData.set("pdfFiles", JSON.stringify(pdfBase64Array))
+                formData.set("pdfFiles", JSON.stringify(pdfFiles.map(f => ({ base64: f.base64!, name: f.file.name }))))
 
                 const result = await uploadDocument(formData)
 
                 if (result.success) {
-                    setMessage({ error: false, text: result.message })
+                    toast.success("Upload complete", {
+                        id: toastId,
+                        description: result.message,
+                    })
                     setPdfFiles([])
                     setDocumentTitle("")
                 } else {
-                    setMessage({ error: true, text: result.message })
+                    toast.error("Upload failed", {
+                        id: toastId,
+                        description: result.message,
+                    })
                 }
             } catch (error) {
                 console.error("Error uploading document:", error)
-                setMessage({ error: true, text: "An unexpected error occurred. Please try again." })
+                toast.error("Unexpected error", {
+                    id: toastId,
+                    description: "An unexpected error occurred. Please try again.",
+                })
             } finally {
                 setIsProcessing(false)
             }
@@ -274,15 +267,30 @@ export default function UploadPage() {
 
     const isLoading = isPending || isProcessing
 
+    const typeCards = [
+        {
+            type: "MEDICINE" as const,
+            label: "Medicine",
+            description: "Drug information, dosages, side effects",
+            icon: Pill,
+            color: "#7a9eaf",
+        },
+        {
+            type: "DISEASE" as const,
+            label: "Disease",
+            description: "Conditions, symptoms, treatments",
+            icon: Activity,
+            color: "#c49a6c",
+        },
+    ]
+
     return (
         <>
+            <PageTitle title="Upload" />
             <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#e5e0d8] bg-[#fdfcf9]">
                 <div className="flex items-center gap-2 px-6">
                     <SidebarTrigger className="-ml-1 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/40" />
-                    <Separator
-                        orientation="vertical"
-                        className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]"
-                    />
+                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]" />
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
@@ -297,7 +305,7 @@ export default function UploadPage() {
                 </div>
             </header>
 
-            <div className="flex flex-1 flex-col gap-6 p-6 pt-4">
+            <div className="flex flex-1 flex-col gap-6 p-6 pt-4 bg-[#faf6f1]">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-[#3d3630]">Upload Documents</h1>
                     <p className="text-[#8a8279] mt-1 text-sm">
@@ -305,82 +313,54 @@ export default function UploadPage() {
                     </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6 max-w-3xl">
                     {/* Document Type Selection */}
                     <div className="space-y-3">
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                            Document Type
-                        </label>
+                        <label className="block text-sm font-medium text-[#3d3630]">Document Type</label>
                         <div className="grid grid-cols-2 gap-4">
-                            <button
-                                type="button"
-                                onClick={() => setDocumentType("MEDICINE")}
-                                disabled={isLoading}
-                                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all duration-200 ${documentType === "MEDICINE"
-                                    ? "border-blue-500 bg-blue-50 dark:bg-blue-500/20"
-                                    : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-500"
-                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                            >
-                                <Pill className={`h-6 w-6 ${documentType === "MEDICINE"
-                                    ? "text-blue-600 dark:text-blue-400"
-                                    : "text-slate-500 dark:text-slate-400"
-                                    }`} />
-                                <span className={`font-medium ${documentType === "MEDICINE"
-                                    ? "text-blue-700 dark:text-blue-300"
-                                    : "text-slate-600 dark:text-slate-400"
-                                    }`}>Medicine</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setDocumentType("DISEASE")}
-                                disabled={isLoading}
-                                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all duration-200 ${documentType === "DISEASE"
-                                    ? "border-blue-500 bg-blue-50 dark:bg-blue-500/20"
-                                    : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-500"
-                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                            >
-                                <Activity className={`h-6 w-6 ${documentType === "DISEASE"
-                                    ? "text-blue-600 dark:text-blue-400"
-                                    : "text-slate-500 dark:text-slate-400"
-                                    }`} />
-                                <span className={`font-medium ${documentType === "DISEASE"
-                                    ? "text-blue-700 dark:text-blue-300"
-                                    : "text-slate-600 dark:text-slate-400"
-                                    }`}>Disease</span>
-                            </button>
+                            {typeCards.map((card) => (
+                                <button
+                                    key={card.type}
+                                    type="button"
+                                    onClick={() => setDocumentType(card.type)}
+                                    disabled={isLoading}
+                                    className={`flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 transition-all duration-200 ${documentType === card.type
+                                        ? "border-[#8b7355] bg-[#f0e6c8]/20 shadow-sm"
+                                        : "border-[#e5e0d8] bg-[#fdfcf9] hover:border-[#c4a882]/40"
+                                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                    <div className={`rounded-full p-2.5 ${documentType === card.type ? "bg-[#f0e6c8]/60" : "bg-[#f5f0eb]"}`}>
+                                        <card.icon className="h-5 w-5" style={{ color: card.color }} />
+                                    </div>
+                                    <span className={`font-medium ${documentType === card.type ? "text-[#3d3630]" : "text-[#8a8279]"}`}>{card.label}</span>
+                                    <span className="text-xs text-[#8a8279]">{card.description}</span>
+                                </button>
+                            ))}
                         </div>
                     </div>
 
                     {/* Document Title */}
                     <div className="space-y-2">
-                        <label
-                            htmlFor="documentTitle"
-                            className="block text-sm font-medium text-slate-700 dark:text-slate-200"
-                        >
-                            Document Title
-                        </label>
+                        <label htmlFor="documentTitle" className="block text-sm font-medium text-[#3d3630]">Document Title</label>
                         <input
                             type="text"
                             id="documentTitle"
                             value={documentTitle}
                             onChange={(e) => setDocumentTitle(e.target.value)}
                             placeholder="Enter a descriptive title for this document..."
-                            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                            className="w-full px-4 py-2.5 border border-[#e5e0d8] rounded-xl bg-[#fdfcf9] text-[#3d3630] placeholder:text-[#8a8279]/60 focus:outline-none focus:ring-2 focus:ring-[#8b7355]/30 focus:border-[#8b7355] transition-colors"
                             disabled={isLoading}
                         />
                     </div>
 
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <label
-                                htmlFor="pdfFile"
-                                className="block text-sm font-medium text-slate-700 dark:text-slate-200"
-                            >
+                            <label htmlFor="pdfFile" className="block text-sm font-medium text-[#3d3630]">
                                 Upload PDF Documents (up to {MAX_PDF_FILES})
                             </label>
-                            <span className="text-sm text-slate-500 dark:text-slate-400">
+                            <Badge variant="outline" className="text-xs border-[#e5e0d8] text-[#8a8279]">
                                 {pdfFiles.length}/{MAX_PDF_FILES} files
-                            </span>
+                            </Badge>
                         </div>
 
                         <input
@@ -395,25 +375,23 @@ export default function UploadPage() {
                             disabled={isLoading || pdfFiles.length >= MAX_PDF_FILES}
                         />
 
-                        {/* Upload area - only show if less than max files */}
+                        {/* Upload area */}
                         {pdfFiles.length < MAX_PDF_FILES && (
-                            <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center hover:border-blue-500 dark:hover:border-blue-400 bg-slate-50/50 dark:bg-slate-800/30 transition-colors duration-200">
+                            <div className="border-2 border-dashed border-[#e5e0d8] rounded-xl p-8 text-center hover:border-[#c4a882]/60 bg-[#fdfcf9]/60 transition-colors duration-200">
                                 <div className="space-y-3">
-                                    <div className="mx-auto w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
-                                        <UploadCloud className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                    <div className="mx-auto w-12 h-12 rounded-full bg-[#f0e6c8]/40 flex items-center justify-center">
+                                        <UploadCloud className="h-6 w-6 text-[#8b7355]" />
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-700 dark:text-slate-300">
-                                            Drag and drop your PDFs here, or
-                                        </p>
+                                        <p className="text-sm text-[#3d3630]">Drag and drop your PDFs here, or</p>
                                         <label
                                             htmlFor="pdfFile"
-                                            className="mt-2 inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white text-sm rounded-lg cursor-pointer transition-colors duration-200"
+                                            className="mt-2 inline-block px-4 py-2 bg-[#8b7355] hover:bg-[#6b5a42] text-white text-sm rounded-lg cursor-pointer transition-colors duration-200"
                                         >
                                             Browse files
                                         </label>
                                     </div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    <p className="text-xs text-[#8a8279]">
                                         PDF files only, up to 10MB each • {MAX_PDF_FILES - pdfFiles.length} slot(s) remaining
                                     </p>
                                 </div>
@@ -423,30 +401,19 @@ export default function UploadPage() {
                         {/* Sortable file list */}
                         {pdfFiles.length > 0 && (
                             <div className="space-y-2">
-                                <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                                    <GripVertical size={14} className="text-slate-400 dark:text-slate-500" />
+                                <p className="text-xs text-[#8a8279] flex items-center gap-1.5">
+                                    <GripVertical size={14} />
                                     Drag to reorder • Files will be processed in this order
                                 </p>
-                                <DndContext
-                                    sensors={sensors}
-                                    collisionDetection={closestCenter}
-                                    onDragEnd={handleDragEnd}
-                                >
-                                    <SortableContext
-                                        items={pdfFiles.map(f => f.id)}
-                                        strategy={verticalListSortingStrategy}
-                                    >
+                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                                    <SortableContext items={pdfFiles.map(f => f.id)} strategy={verticalListSortingStrategy}>
                                         <div className="space-y-2">
                                             {pdfFiles.map((item, index) => (
                                                 <div key={item.id} className="relative">
-                                                    <span className="absolute -left-6 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 dark:text-slate-500 tabular-nums">
+                                                    <span className="absolute -left-6 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8a8279] tabular-nums">
                                                         {index + 1}
                                                     </span>
-                                                    <SortablePdfItem
-                                                        item={item}
-                                                        onRemove={handleRemoveFile}
-                                                        isPending={isLoading}
-                                                    />
+                                                    <SortablePdfItem item={item} onRemove={handleRemoveFile} isPending={isLoading} />
                                                 </div>
                                             ))}
                                         </div>
@@ -456,17 +423,17 @@ export default function UploadPage() {
                         )}
 
                         {pdfFiles.length >= MAX_PDF_FILES && (
-                            <p className="text-amber-600 dark:text-amber-400 text-sm flex items-center gap-1.5">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400"></span>
-                                Maximum of {MAX_PDF_FILES} PDFs reached
-                            </p>
+                            <div className="flex items-center gap-2 text-sm text-[#c49a6c]">
+                                <AlertCircle className="size-4" />
+                                <span>Maximum of {MAX_PDF_FILES} PDFs reached</span>
+                            </div>
                         )}
                     </div>
 
                     <button
                         type="submit"
                         disabled={isLoading || pdfFiles.length === 0 || !documentTitle.trim()}
-                        className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white font-medium rounded-lg shadow-sm dark:shadow-blue-500/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        className="w-full py-3 px-4 bg-[#8b7355] hover:bg-[#6b5a42] text-white font-medium rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#8b7355]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                     >
                         {isLoading ? (
                             <span className="flex items-center justify-center">
@@ -474,44 +441,40 @@ export default function UploadPage() {
                                 Processing {pdfFiles.length > 1 ? `${pdfFiles.length} PDFs` : 'PDF'}...
                             </span>
                         ) : (
-                            pdfFiles.length > 1
-                                ? `Upload ${pdfFiles.length} PDFs`
-                                : "Upload Document"
+                            pdfFiles.length > 1 ? `Upload ${pdfFiles.length} PDFs` : "Upload Document"
                         )}
                     </button>
-
-                    {message && (
-                        <div
-                            className={`p-4 rounded-lg border ${message.error
-                                ? "bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-800 dark:text-red-300"
-                                : "bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-300"
-                                } mt-4 flex items-start`}
-                        >
-                            <div className={`rounded-full w-6 h-6 mr-3 shrink-0 flex items-center justify-center text-sm font-bold ${message.error
-                                ? "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400"
-                                : "bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400"
-                                }`}>
-                                {message.error ? "!" : "✓"}
-                            </div>
-                            <div>
-                                <p className="font-medium">{message.error ? "Error" : "Success"}</p>
-                                <p className="text-sm opacity-90">{message.text}</p>
-                            </div>
-                        </div>
-                    )}
                 </form>
 
                 {/* Info Section */}
-                <div className="rounded-xl border border-[#e5e0d8] bg-[#faf6f1]/60 p-6">
-                    <h3 className="font-semibold mb-2 text-[#3d3630]">About Document Processing</h3>
-                    <ul className="text-sm text-[#8a8279] space-y-2">
-                        <li>• PDFs will be parsed and converted to text using AI vision models</li>
-                        <li>• Text will be split into chunks for optimal retrieval</li>
-                        <li>• Chunks will be embedded using Voyage AI and stored in Pinecone</li>
-                        <li>• Processing may take a few minutes for large documents</li>
-                        <li>• Documents are stored in the database for easy management and deletion</li>
-                    </ul>
-                </div>
+                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm max-w-3xl">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base font-semibold text-[#3d3630] flex items-center gap-2">
+                            <Info className="size-4 text-[#8b7355]" />
+                            About Document Processing
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <ul className="text-sm text-[#8a8279] space-y-2">
+                            <li className="flex items-start gap-2">
+                                <CheckCircle2 className="size-4 text-[#8fa68e] mt-0.5 shrink-0" />
+                                PDFs will be parsed and converted to text using AI vision models
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <CheckCircle2 className="size-4 text-[#8fa68e] mt-0.5 shrink-0" />
+                                Text will be split into chunks for optimal retrieval
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <CheckCircle2 className="size-4 text-[#8fa68e] mt-0.5 shrink-0" />
+                                Chunks will be embedded using Voyage AI and stored in Pinecone
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <CheckCircle2 className="size-4 text-[#8fa68e] mt-0.5 shrink-0" />
+                                Processing may take a few minutes for large documents
+                            </li>
+                        </ul>
+                    </CardContent>
+                </Card>
             </div>
         </>
     )

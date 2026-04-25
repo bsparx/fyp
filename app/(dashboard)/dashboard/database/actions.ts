@@ -71,6 +71,9 @@ export interface HybridGraphEdge {
   source: string;
   target: string;
   type: string;
+  sourceDocumentId?: string | null;
+  reportDate?: string | null;
+  properties?: Record<string, string | null>;
 }
 
 export interface HybridGraphEvidence {
@@ -217,6 +220,7 @@ async function buildPrivateGraphContext(
             hospitalName: true,
             document: {
               select: {
+                id: true,
                 title: true,
               },
             },
@@ -309,12 +313,16 @@ async function buildPrivateGraphContext(
       const hasReportKey = `${patientNodeId}|HAS_REPORT|${reportNodeId}`;
       const hasObservationKey = `${reportNodeId}|HAS_OBSERVATION|${observationNodeId}`;
       const ofMetricKey = `${observationNodeId}|OF_METRIC|${metricNodeId}`;
+      const rowDocId = row.report.document?.id ?? null;
+      const rowReportDate = toIso(row.report.reportDate);
 
       if (!edgeMap.has(hasReportKey)) {
         edgeMap.set(hasReportKey, {
           source: patientNodeId,
           target: reportNodeId,
           type: "HAS_REPORT",
+          sourceDocumentId: rowDocId,
+          reportDate: rowReportDate,
         });
       }
 
@@ -323,6 +331,8 @@ async function buildPrivateGraphContext(
           source: reportNodeId,
           target: observationNodeId,
           type: "HAS_OBSERVATION",
+          sourceDocumentId: rowDocId,
+          reportDate: rowReportDate,
         });
       }
 
@@ -331,13 +341,15 @@ async function buildPrivateGraphContext(
           source: observationNodeId,
           target: metricNodeId,
           type: "OF_METRIC",
+          sourceDocumentId: rowDocId,
+          reportDate: rowReportDate,
         });
       }
 
       evidence.push({
         id: row.id,
         patientId: row.report.user.id,
-        patientName: row.report.user.name,
+        patientName: null,
         reportId: row.report.id,
         documentTitle: row.report.document?.title ?? null,
         reportDate: toIso(row.report.reportDate),
@@ -693,6 +705,7 @@ export async function searchHybridDatabase(
   query: string,
   topK: number = 50,
   typeFilter: "medicine" | "disease" | "all" = "all",
+  patientId: string = "",
 ): Promise<HybridSearchResult> {
   if (!query.trim()) {
     return {
@@ -704,7 +717,7 @@ export async function searchHybridDatabase(
   try {
     const [vectorResults, neo4jGraphContext] = await Promise.all([
       searchVectorDatabase(query, topK, typeFilter),
-      searchGraphContextInNeo4j(query),
+      searchGraphContextInNeo4j(query, patientId),
     ]);
 
     const graphContext =

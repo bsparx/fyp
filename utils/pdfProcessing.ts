@@ -410,7 +410,7 @@ export async function pdfToText(
 
 export async function processPdfAndConvertToText(
   pdfBase64Array: string[],
-): Promise<string | null> {
+): Promise<{ text: string; mergedBase64: string } | null> {
   if (!pdfBase64Array.length) {
     console.error("processPdfAndConvertToText received no valid files.");
     return null;
@@ -444,7 +444,8 @@ export async function processPdfAndConvertToText(
 
     if (pageCount <= MAX_PAGES_PER_CHUNK) {
       console.log("PDF is within 99-page limit, sending directly to glm-ocr.");
-      return await pdfToText(mergedBase64, 1);
+      const text = await pdfToText(mergedBase64, 1);
+      return text ? { text, mergedBase64 } : null;
     }
 
     console.log(
@@ -497,7 +498,7 @@ export async function processPdfAndConvertToText(
       .join("\n\n");
 
     console.log("Full text length:", fullText.length);
-    return fullText;
+    return fullText ? { text: fullText, mergedBase64 } : null;
   } catch (error) {
     console.error("Failed to process PDF:", error);
     return null;

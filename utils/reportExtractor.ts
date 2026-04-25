@@ -304,6 +304,92 @@ Do not include any other text or formatting. Just the JSON object.`;
 }
 
 // ============================================================================
+// METADATA-ONLY EXTRACTION (for comments/notes — no test values, no fidelity)
+// ============================================================================
+
+const METADATA_EXTRACTION_PROMPT = `You are an elite medical data extraction AI. You are provided with an image of a medical document.
+Your task is to accurately extract the hospital name and report date into the required JSON format.
+
+### EXTRACTION INSTRUCTIONS:
+
+1. hospitalName:
+- Look at the top header or logo area for the laboratory, clinic, or hospital name.
+- Extract exactly as written. If completely missing, return null.
+
+2. reportDate:
+- Look for "Report Date", "Collected Date", "Result Date", "Date of Visit", "Date", or "Date:".
+- CAUTION: DO NOT confuse this with the patient's Date of Birth (DOB).
+- You MUST normalize and convert the extracted date to strictly "YYYY-MM-DD" format (e.g., "12/31/2023" -> "2023-12-31", "05-Aug-2024" -> "2024-08-05").
+- If missing or unreadable, return null.`;
+
+export async function extractReportMetadataOnly(
+  fileBase64: string,
+  fileType: "pdf" | "image",
+): Promise<{ hospitalName: string | null; reportDate: string | null }> {
+  console.log("=== STARTING METADATA-ONLY EXTRACTION ===");
+
+  try {
+    const imageBase64 = await prepareImageInput(fileBase64, fileType);
+
+    const metadataResponse = await fetchWithRetry(() =>
+      openRouter.chat.completions.create({
+        model: "cyankiwi/Qwen3.5-9B-AWQ-4bit",
+        temperature: 0,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image_url", image_url: { url: imageBase64 } },
+              { type: "text", text: METADATA_EXTRACTION_PROMPT },
+            ],
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "medical_report_metadata",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                hospitalName: { type: ["string", "null"] },
+                reportDate: { type: ["string", "null"] },
+              },
+              required: ["hospitalName", "reportDate"],
+              additionalProperties: false,
+            },
+          },
+        },
+      }),
+    );
+
+    const metadataContent = metadataResponse.choices[0]?.message?.content;
+    if (!metadataContent) {
+      throw new Error("No content in metadata extraction AI response");
+    }
+
+    const extractedMetadata = JSON.parse(metadataContent);
+
+    const result = {
+      hospitalName: extractedMetadata.hospitalName
+        ? extractedMetadata.hospitalName.toUpperCase()
+        : null,
+      reportDate: extractedMetadata.reportDate ?? null,
+    };
+
+    console.log("=== METADATA EXTRACTION RESULT ===");
+    console.log(`Hospital: ${result.hospitalName}`);
+    console.log(`Date: ${result.reportDate}`);
+    console.log("=== END METADATA EXTRACTION RESULT ===");
+
+    return result;
+  } catch (error) {
+    console.error("Error in metadata-only extraction:", error);
+    return { hospitalName: null, reportDate: null };
+  }
+}
+
+// ============================================================================
 // MAIN EXPORT FUNCTION
 // ============================================================================
 
@@ -392,21 +478,6 @@ You must return ONLY valid, well-formed JSON matching the following structure. D
     }
   ]
 }`;
-
-    const METADATA_EXTRACTION_PROMPT = `You are an elite medical data extraction AI. You are provided with an image of a medical laboratory report.
-Your task is to accurately extract the hospital name and report date into the required JSON format.
-
-### EXTRACTION INSTRUCTIONS:
-
-1. hospitalName:
-- Look at the top header or logo area for the laboratory, clinic, or hospital name.
-- Extract exactly as written. If completely missing, return null.
-
-2. reportDate:
-- Look for "Report Date", "Collected Date", "Result Date", or "Date".
-- CAUTION: DO NOT confuse this with the patient's Date of Birth (DOB).
-- You MUST normalize and convert the extracted date to strictly "YYYY-MM-DD" format (e.g., "12/31/2023" -> "2023-12-31", "05-Aug-2024" -> "2024-08-05").
-- If missing or unreadable, return null.`;
 
     const testValuesResponse = await fetchWithRetry(() =>
       openRouter.chat.completions.create({

@@ -188,6 +188,11 @@ export async function embedAndStorePatientDocument(
   content: string,
   documentTitle: string,
   patientId: string,
+  options?: {
+    singleChunk?: boolean;
+    headerPrefix?: string;
+    reportDate?: string;
+  },
 ): Promise<boolean> {
   try {
     // Check if document is already ingested
@@ -201,8 +206,17 @@ export async function embedAndStorePatientDocument(
       return true;
     }
 
-    // Split content into parent chunks using header-based splitter
-    const parentChunks = textSplitterForRag(content);
+    // Split content into parent chunks using header-based splitter,
+    // or treat the entire document as a single parent chunk when requested.
+    let parentChunks: string[];
+    if (options?.singleChunk) {
+      const fullContent = options.headerPrefix
+        ? `${options.headerPrefix}\n\n${content}`
+        : content;
+      parentChunks = [fullContent];
+    } else {
+      parentChunks = textSplitterForRag(content);
+    }
 
     if (parentChunks.length === 0) {
       console.log("No chunks to process.");
@@ -271,6 +285,7 @@ export async function embedAndStorePatientDocument(
                 patient: true,
                 patientId,
                 type: "patient", // "patient" for patient documents
+                ...(options?.reportDate ? { reportDate: options.reportDate } : {}),
               },
             };
           },

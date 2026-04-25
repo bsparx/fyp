@@ -8,6 +8,7 @@ import {
   Database,
   Settings,
   HelpCircle,
+  Command,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -140,6 +141,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <div className="px-3 py-2 group-data-[collapsible=icon]:hidden">
+          <div className="flex items-center justify-between text-[10px] text-[#8a8279] uppercase tracking-wider">
+            <span>Command Menu</span>
+            <kbd className="inline-flex items-center gap-1 rounded border border-[#e5e0d8] bg-[#fdfcf9] px-1.5 py-0.5 font-mono text-[10px] text-[#8a8279]">
+              <Command className="size-2.5" />
+              K
+            </kbd>
+          </div>
+        </div>
         <div className="mt-2 pt-2 border-t border-[#e5e0d8]/60">
           <NavUser />
         </div>

@@ -10,6 +10,8 @@ import {
   deleteDocumentGraph,
   syncDocumentGraphFromSql,
 } from "@/utils/graphRag";
+import { extractReportMetadataOnly } from "@/utils/reportExtractor";
+import { uploadFileToCloudinary } from "@/utils/cloudinaryUpload";
 import { revalidatePath } from "next/cache";
 import type {
   DocumentType,
@@ -23,9 +25,15 @@ export interface UploadDocumentResult {
   documentId?: string;
 }
 
+interface PdfFileData {
+  base64: string;
+  name: string;
+}
+
 /**
  * Upload and process PDF documents for RAG knowledge base.
- * Converts PDFs to text, stores in database, and embeds in vector store.
+ * Converts PDFs to text, uploads to Cloudinary, extracts metadata,
+ * stores in database, and embeds in vector store.
  */
 export async function uploadDocument(
   formData: FormData,
@@ -51,7 +59,8 @@ export async function uploadDocument(
     }
 
     // Parse the base64 PDF data
-    const pdfBase64Array: string[] = JSON.parse(pdfFilesJson);
+    const pdfFiles: PdfFileData[] = JSON.parse(pdfFilesJson);
+    const pdfBase64Array = pdfFiles.map((f) => f.base64);
 
     if (pdfBase64Array.length === 0) {
       return { success: false, message: "No PDF files provided." };
@@ -59,17 +68,33 @@ export async function uploadDocument(
 
     console.log(`Processing ${pdfBase64Array.length} PDF file(s)...`);
 
-    // Convert PDFs to text
-    const extractedText = await processPdfAndConvertToText(pdfBase64Array);
+    // Convert PDFs to text and get merged base64 for Cloudinary upload
+    const processingResult = await processPdfAndConvertToText(pdfBase64Array);
 
-    if (!extractedText) {
+    if (!processingResult) {
       return {
         success: false,
         message: "Failed to extract text from PDFs. Please try again.",
       };
     }
 
+    const { text: extractedText, mergedBase64 } = processingResult;
     console.log(`Extracted ${extractedText.length} characters of text.`);
+
+    // Extract hospital name and report date from the first page of the merged PDF
+    const extractedData = await extractReportMetadataOnly(
+      mergedBase64,
+      "pdf",
+    );
+
+    // Upload the merged PDF to Cloudinary
+    const dataUri = `data:application/pdf;base64,${mergedBase64}`;
+    const pdfUrl = await uploadFileToCloudinary({
+      dataUri,
+      fileType: "pdf",
+      folder: "rag_documents",
+      publicId: `rag_${Date.now()}`,
+    });
 
     // Create document record in database with the selected RAG subtype
     const document = await prisma.document.create({
@@ -79,6 +104,11 @@ export async function uploadDocument(
         type: "RAG",
         ragSubtype,
         isIngested: false,
+        pdfUrl,
+        hospitalName: extractedData.hospitalName,
+        reportDate: extractedData.reportDate
+          ? new Date(extractedData.reportDate)
+          : null,
       },
     });
 

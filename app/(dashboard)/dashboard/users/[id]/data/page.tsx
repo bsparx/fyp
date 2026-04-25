@@ -1,11 +1,19 @@
 import { getUserAverageFidelitySummary, getUserById, getUserDocuments } from "../../data/actions"
 import UserDataClient from "./user-data-client"
+import type { Metadata } from "next"
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+    const resolvedParams = await params
+    const user = await getUserById(resolvedParams.id)
+    return {
+        title: user ? `${user.name || user.email} | HMS` : "User Data | HMS",
+    }
+}
 
 export default async function UserDataPage({ params }: { params: Promise<{ id: string }> }) {
     const resolvedParams = await params
     const userId = resolvedParams.id
 
-    // Fetch user details and documents in parallel
     const [user, documentsData, fidelitySummary] = await Promise.all([
         getUserById(userId),
         getUserDocuments(userId, 1),
