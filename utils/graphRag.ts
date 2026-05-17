@@ -122,9 +122,9 @@ const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD;
 const NEO4J_DATABASE = process.env.NEO4J_DATABASE || "neo4j";
 const KG_EXTRACTOR_BASE_URL =
   process.env.KG_EXTRACTOR_BASE_URL ??
-  "https://bsparx128--example-qwen3-6-35b-a3b-awq-inference-vllmser-088df8.modal.run/v1";
+  "https://muddasirjaved10--example-qwen3-5-9b-awq-inference-vllmse-a9b4c2.modal.run/v1";
 const KG_EXTRACTOR_MODEL =
-  process.env.KG_EXTRACTOR_MODEL ?? "cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit";
+  process.env.KG_EXTRACTOR_MODEL ?? "cyankiwi/Qwen3.5-9B-AWQ-4bit";
 const KG_EXTRACTOR_API_KEY =
   process.env.KG_EXTRACTOR_API_KEY ??
   process.env.OPENAI_API_KEY ??
@@ -229,11 +229,25 @@ function normalizeEntityId(id: string): string {
     // Known drug allergen patterns — remap to medicine_ so they merge
     // with Medicine nodes from medicine documents and patient records.
     const knownDrugAllergens = new Set([
-      "penicillin", "amoxicillin", "ampicillin", "cephalosporin",
-      "aspirin", "ibuprofen", "naproxen", "diclofenac",
-      "sulfonamide", "tetracycline", "erythromycin", "azithromycin",
-      "methotrexate", "warfarin", "codeine", "morphine",
-      "insulin", "contrast_dye", "latex"
+      "penicillin",
+      "amoxicillin",
+      "ampicillin",
+      "cephalosporin",
+      "aspirin",
+      "ibuprofen",
+      "naproxen",
+      "diclofenac",
+      "sulfonamide",
+      "tetracycline",
+      "erythromycin",
+      "azithromycin",
+      "methotrexate",
+      "warfarin",
+      "codeine",
+      "morphine",
+      "insulin",
+      "contrast_dye",
+      "latex",
     ]);
     if (knownDrugAllergens.has(substanceName)) {
       return `medicine_${substanceName}`;
@@ -802,10 +816,9 @@ function normalizeExtractedGraph(
               properties.effect,
             ]),
       confidence:
-        type === "PATIENT" ? 1.0 : clampConfidence(
-          entity.confidence ?? properties.confidence,
-          0.7,
-        ),
+        type === "PATIENT"
+          ? 1.0
+          : clampConfidence(entity.confidence ?? properties.confidence, 0.7),
     };
 
     if (!entityRows.has(key)) {
@@ -1051,7 +1064,8 @@ async function extractGraphFromTextWithLlm(args: {
     });
   } catch (error) {
     const err = error as Error & { status?: number; response?: unknown };
-    const status = err.status ?? (err.response as { status?: number } | undefined)?.status;
+    const status =
+      err.status ?? (err.response as { status?: number } | undefined)?.status;
     console.error(
       `Primary KG extraction FAILED for document ${args.documentId} (kind: ${promptKind}). ` +
         `LLM status: ${status ?? "unknown"}. Error: ${err.message}`,
@@ -1090,8 +1104,13 @@ async function extractGraphFromTextWithLlm(args: {
         kind: promptKind,
       });
     } catch (fallbackError) {
-      const fbErr = fallbackError as Error & { status?: number; response?: unknown };
-      const fbStatus = fbErr.status ?? (fbErr.response as { status?: number } | undefined)?.status;
+      const fbErr = fallbackError as Error & {
+        status?: number;
+        response?: unknown;
+      };
+      const fbStatus =
+        fbErr.status ??
+        (fbErr.response as { status?: number } | undefined)?.status;
       console.error(
         `Fallback KG extraction FAILED for document ${args.documentId} (kind: ${promptKind}). ` +
           `LLM status: ${fbStatus ?? "unknown"}. Error: ${fbErr.message}`,
@@ -1801,7 +1820,14 @@ function toEdgeArray(value: unknown): DocumentGraphEdgeSample[] {
       }
     }
 
-    edges.push({ source, target, type, sourceDocumentId, reportDate, properties: edgeProperties });
+    edges.push({
+      source,
+      target,
+      type,
+      sourceDocumentId,
+      reportDate,
+      properties: edgeProperties,
+    });
   }
 
   return edges;
@@ -2190,11 +2216,13 @@ export async function getDocumentKnowledgeGraphFromNeo4j(
     });
     const docUrl =
       docRecord?.pdfUrl ??
-      (await prisma.medicalReport.findFirst({
-        where: { documentId },
-        select: { reportURL: true },
-        orderBy: { createdAt: "desc" },
-      }))?.reportURL ??
+      (
+        await prisma.medicalReport.findFirst({
+          where: { documentId },
+          select: { reportURL: true },
+          orderBy: { createdAt: "desc" },
+        })
+      )?.reportURL ??
       null;
     const docReportDate = docRecord?.reportDate
       ? toDateOnlyIso(docRecord.reportDate)
@@ -2364,25 +2392,30 @@ export async function getFullDocumentGraphFromNeo4j(
     });
     const docUrl =
       docRecord?.pdfUrl ??
-      (await prisma.medicalReport.findFirst({
-        where: { documentId },
-        select: { reportURL: true },
-        orderBy: { createdAt: "desc" },
-      }))?.reportURL ??
+      (
+        await prisma.medicalReport.findFirst({
+          where: { documentId },
+          select: { reportURL: true },
+          orderBy: { createdAt: "desc" },
+        })
+      )?.reportURL ??
       null;
     const docReportDate = docRecord?.reportDate
       ? toDateOnlyIso(docRecord.reportDate)
       : null;
 
-    const rawEdges = record.get("edges") as Array<Record<string, unknown>> | null;
-    const edgesWithMetadata =
-      Array.isArray(rawEdges)
-        ? rawEdges.map((edge) => ({
-            ...edge,
-            sourceDocumentId: (edge as Record<string, unknown>).sourceDocumentId ?? docUrl,
-            reportDate: (edge as Record<string, unknown>).reportDate ?? docReportDate,
-          }))
-        : rawEdges;
+    const rawEdges = record.get("edges") as Array<
+      Record<string, unknown>
+    > | null;
+    const edgesWithMetadata = Array.isArray(rawEdges)
+      ? rawEdges.map((edge) => ({
+          ...edge,
+          sourceDocumentId:
+            (edge as Record<string, unknown>).sourceDocumentId ?? docUrl,
+          reportDate:
+            (edge as Record<string, unknown>).reportDate ?? docReportDate,
+        }))
+      : rawEdges;
 
     return buildFullGraphPayload({
       scope: "document",
@@ -2865,9 +2898,13 @@ export async function searchGraphContextInNeo4j(
       });
 
       const mentionUrl = toNullableString(record.get("mentionUrl"));
-      const mentionReportDate = toNullableString(record.get("mentionReportDate"));
+      const mentionReportDate = toNullableString(
+        record.get("mentionReportDate"),
+      );
       const relationUrl = toNullableString(record.get("relationUrl"));
-      const relationReportDate = toNullableString(record.get("relationReportDate"));
+      const relationReportDate = toNullableString(
+        record.get("relationReportDate"),
+      );
 
       semanticEdgeMap.set(`${documentNodeId}|MENTIONS|${entityNodeId}`, {
         source: documentNodeId,
@@ -2926,11 +2963,16 @@ export async function searchGraphContextInNeo4j(
             },
           });
 
-          const relationPropertiesJson = toNullableString(record.get("relationPropertiesJson"));
+          const relationPropertiesJson = toNullableString(
+            record.get("relationPropertiesJson"),
+          );
           let relationProps: Record<string, string | null> | undefined;
           if (relationPropertiesJson) {
             try {
-              const parsed = JSON.parse(relationPropertiesJson) as Record<string, unknown>;
+              const parsed = JSON.parse(relationPropertiesJson) as Record<
+                string,
+                unknown
+              >;
               relationProps = {};
               for (const [k, v] of Object.entries(parsed)) {
                 relationProps[k] = toNullableString(v);

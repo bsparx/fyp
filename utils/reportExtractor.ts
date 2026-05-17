@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 
 const openRouter = new OpenAI({
   baseURL:
-    "https://muddasirjaved666--example-qwen3-5-9b-awq-inference-vllms-f9f18b.modal.run/v1",
+    "https://muddasirjaved10--example-qwen3-5-9b-awq-inference-vllmse-a9b4c2.modal.run/v1",
   apiKey: process.env.OPENROUTER_API_KEY || "",
 });
 
