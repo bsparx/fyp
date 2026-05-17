@@ -49,86 +49,109 @@
 :root {
   --radius: 0.625rem;
 
-  /* Warm, dry color palette inspired by the reference image */
-  --background: #faf6f1;
-  --foreground: #3d3630;
-  --card: #fdfcf9;
-  --card-foreground: #3d3630;
-  --popover: #fdfcf9;
-  --popover-foreground: #3d3630;
-  --primary: #8b7355;
-  --primary-foreground: #faf6f1;
-  --secondary: #e8dfd0;
-  --secondary-foreground: #3d3630;
-  --muted: #e8e4e0;
-  --muted-foreground: #8a8279;
-  --accent: #f0e6c8;
-  --accent-foreground: #3d3630;
-  --destructive: #c4705a;
-  --border: #e5e0d8;
-  --input: #e5e0d8;
-  --ring: #8b7355;
+  /* Calm blue color palette - Discord-inspired relaxing theme */
+  --background: #eef2f7;
+  --foreground: #1e2a3a;
+  --card: #ffffff;
+  --card-foreground: #1e2a3a;
+  --popover: #ffffff;
+  --popover-foreground: #1e2a3a;
+  --primary: #5b7cfa;
+  --primary-foreground: #eef2f7;
+  --secondary: #d8e0f0;
+  --secondary-foreground: #1e2a3a;
+  --muted: #dce3f0;
+  --muted-foreground: #6b7d99;
+  --accent: #dbe4f5;
+  --accent-foreground: #1e2a3a;
+  --destructive: #e74c3c;
+  --border: #d0d9e8;
+  --input: #d0d9e8;
+  --ring: #5b7cfa;
 
-  /* Chart colors - muted earth tones */
-  --chart-1: #c49a6c;
-  --chart-2: #8fa68e;
-  --chart-3: #7a9eaf;
-  --chart-4: #c4a882;
-  --chart-5: #b8907a;
+  /* Chart colors - calm blues and accents */
+  --chart-1: #8aa4f0;
+  --chart-2: #4ade80;
+  --chart-3: #38bdf8;
+  --chart-4: #8aa4f0;
+  --chart-5: #fbbf24;
 
-  /* Sidebar - warm beige from the image */
-  --sidebar: #f5f0eb;
-  --sidebar-foreground: #3d3630;
-  --sidebar-primary: #8b7355;
-  --sidebar-primary-foreground: #faf6f1;
-  --sidebar-accent: #ede8e1;
-  --sidebar-accent-foreground: #3d3630;
-  --sidebar-border: #e5e0d8;
-  --sidebar-ring: #8b7355;
+  /* Sidebar - clean white panel */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1e2a3a;
+  --sidebar-primary: #5b7cfa;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef2f7;
+  --sidebar-accent-foreground: #1e2a3a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #5b7cfa;
 }
 
 .dark {
-  --background: #2d2925;
-  --foreground: #e8e2da;
-  --card: #3d3833;
-  --card-foreground: #e8e2da;
-  --popover: #3d3833;
-  --popover-foreground: #e8e2da;
-  --primary: #c4a882;
-  --primary-foreground: #2d2925;
-  --secondary: #4a4540;
-  --secondary-foreground: #e8e2da;
-  --muted: #4a4540;
-  --muted-foreground: #a8a098;
-  --accent: #4a4540;
-  --accent-foreground: #e8e2da;
-  --destructive: #d4846e;
-  --border: #4a4540;
-  --input: #4a4540;
-  --ring: #c4a882;
+  --background: #1a1d24;
+  --foreground: #e3e5e8;
+  --card: #25282e;
+  --card-foreground: #e3e5e8;
+  --popover: #25282e;
+  --popover-foreground: #e3e5e8;
+  --primary: #8aa4f0;
+  --primary-foreground: #1a1d24;
+  --secondary: #2f3340;
+  --secondary-foreground: #e3e5e8;
+  --muted: #2f3340;
+  --muted-foreground: #8e99ab;
+  --accent: #2f3340;
+  --accent-foreground: #e3e5e8;
+  --destructive: #ef4444;
+  --border: #2f3340;
+  --input: #2f3340;
+  --ring: #8aa4f0;
 
-  --chart-1: #c4a882;
-  --chart-2: #8fa68e;
-  --chart-3: #7a9eaf;
-  --chart-4: #c4a882;
-  --chart-5: #b8907a;
+  --chart-1: #8aa4f0;
+  --chart-2: #4ade80;
+  --chart-3: #38bdf8;
+  --chart-4: #8aa4f0;
+  --chart-5: #fbbf24;
 
-  --sidebar: #35302b;
-  --sidebar-foreground: #e8e2da;
-  --sidebar-primary: #c4a882;
-  --sidebar-primary-foreground: #2d2925;
-  --sidebar-accent: #4a4540;
-  --sidebar-accent-foreground: #e8e2da;
-  --sidebar-border: #4a4540;
-  --sidebar-ring: #c4a882;
+  --sidebar: #1a1d24;
+  --sidebar-foreground: #e3e5e8;
+  --sidebar-primary: #8aa4f0;
+  --sidebar-primary-foreground: #1a1d24;
+  --sidebar-accent: #25282e;
+  --sidebar-accent-foreground: #e3e5e8;
+  --sidebar-border: #2f3340;
+  --sidebar-ring: #8aa4f0;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Improve focus visibility for keyboard navigation */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+  /* Custom selection colors */
+  ::selection {
+    background-color: rgba(91, 124, 250, 0.25);
+    color: #1e2a3a;
+  }
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 

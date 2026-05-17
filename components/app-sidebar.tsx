@@ -81,26 +81,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-[#e5e0d8] bg-[#f5f0eb]"
+      className="border-r border-sidebar-border"
       {...props}
     >
-      <SidebarHeader className="border-b border-[#e5e0d8] bg-[#f0e6c8]/40 px-4 py-4 group-data-[collapsible=icon]:px-2">
+      <SidebarHeader className="px-4 py-4 group-data-[collapsible=icon]:px-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="hover:bg-[#f0e6c8]/60 data-[state=open]:bg-[#f0e6c8]/60"
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <a href="/dashboard" className="flex items-center gap-3">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-[#8b7355] text-[#faf6f1] shadow-sm group-data-[collapsible=icon]:hidden">
-                  <Stethoscope className="size-4" />
+              <a href="/dashboard" className="flex items-center gap-3" aria-label="HMS Admin Dashboard">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
+                  <Stethoscope className="size-4" aria-hidden="true" />
                 </div>
-                <Stethoscope className="size-4 hidden text-[#8b7355] group-data-[collapsible=icon]:block" />
                 <div className="flex flex-col text-left leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate font-semibold text-[#3d3630]">
+                  <span className="truncate font-semibold text-sidebar-foreground">
                     HMS Admin
                   </span>
-                  <span className="truncate text-[11px] text-[#8a8279] font-medium tracking-wide uppercase">
+                  <span className="truncate text-[11px] text-sidebar-foreground/60 font-medium tracking-wide uppercase">
                     Hospital Management
                   </span>
                 </div>
@@ -110,17 +110,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-3 group-data-[collapsible=icon]:px-0">
+      <SidebarContent className="px-2 py-2 group-data-[collapsible=icon]:px-1">
         <NavMain items={data.navMain} />
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-[#e5e0d8] bg-[#ede8e1]/50 px-2 py-3 group-data-[collapsible=icon]:px-0">
+      <SidebarFooter className="px-2 py-3 group-data-[collapsible=icon]:px-1">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
               tooltip="Help & Support"
-              className="text-[#8a8279] hover:bg-[#f0e6c8]/50 hover:text-[#3d3630]"
             >
               <a href="#">
                 <HelpCircle className="size-4" />
@@ -132,7 +131,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton
               asChild
               tooltip="Settings"
-              className="text-[#8a8279] hover:bg-[#f0e6c8]/50 hover:text-[#3d3630]"
             >
               <a href="/dashboard/settings">
                 <Settings className="size-4" />
@@ -142,15 +140,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenuItem>
         </SidebarMenu>
         <div className="px-3 py-2 group-data-[collapsible=icon]:hidden">
-          <div className="flex items-center justify-between text-[10px] text-[#8a8279] uppercase tracking-wider">
+          <div className="flex items-center justify-between text-[10px] text-sidebar-foreground/50 uppercase tracking-wider">
             <span>Command Menu</span>
-            <kbd className="inline-flex items-center gap-1 rounded border border-[#e5e0d8] bg-[#fdfcf9] px-1.5 py-0.5 font-mono text-[10px] text-[#8a8279]">
+            <kbd className="inline-flex items-center gap-1 rounded border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 font-mono text-[10px] text-sidebar-foreground/60">
               <Command className="size-2.5" />
               K
             </kbd>
           </div>
         </div>
-        <div className="mt-2 pt-2 border-t border-[#e5e0d8]/60">
+        <div className="mt-2 pt-2 border-t border-sidebar-border">
           <NavUser />
         </div>
       </SidebarFooter>

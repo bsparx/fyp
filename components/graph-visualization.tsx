@@ -8,13 +8,13 @@ import type { DatabaseFullGraph } from "@/app/(dashboard)/dashboard/database/act
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
     ssr: false,
     loading: () => (
-        <div className="flex items-center justify-center h-full w-full bg-[#faf6f1] rounded-xl border border-[#e5e0d8]">
+        <div className="flex items-center justify-center h-full w-full bg-[#eef2f7] rounded-xl border border-[#d0d9e8]">
             <div className="text-center space-y-3">
                 <div className="relative mx-auto" style={{ width: 40, height: 40 }}>
-                    <div className="absolute inset-0 rounded-full border-2 border-[#e5e0d8] border-t-[#8b7355] animate-spin" />
-                    <div className="absolute inset-2 rounded-full border-2 border-[#e5e0d8] border-b-[#7a9eaf] animate-spin" style={{ animationDirection: "reverse" }} />
+                    <div className="absolute inset-0 rounded-full border-2 border-[#d0d9e8] border-t-[#5b7cfa] animate-spin" />
+                    <div className="absolute inset-2 rounded-full border-2 border-[#d0d9e8] border-b-[#38bdf8] animate-spin" style={{ animationDirection: "reverse" }} />
                 </div>
-                <p className="text-sm text-[#8a8279]">Rendering graph...</p>
+                <p className="text-sm text-[#6b7d99]">Rendering graph...</p>
             </div>
         </div>
     ),
@@ -22,17 +22,17 @@ const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
 
 // Warm earth-tone palette for node types
 const NODE_COLORS: Record<string, string> = {
-    Patient: "#7a9eaf",
-    Report: "#8fa68e",
-    Observation: "#c49a6c",
-    Metric: "#c4705a",
-    Document: "#8b7355",
-    Entity: "#b8907a",
-    Medicine: "#7a9eaf",
-    Disease: "#c4705a",
+    Patient: "#38bdf8",
+    Report: "#4ade80",
+    Observation: "#8aa4f0",
+    Metric: "#e74c3c",
+    Document: "#5b7cfa",
+    Entity: "#fbbf24",
+    Medicine: "#38bdf8",
+    Disease: "#e74c3c",
 }
 
-const DEFAULT_NODE_COLOR = "#8a8279"
+const DEFAULT_NODE_COLOR = "#6b7d99"
 
 function getNodeColor(type: string) {
     return NODE_COLORS[type] || DEFAULT_NODE_COLOR
@@ -60,7 +60,7 @@ export function GraphVisualization({ graphData, height = 500 }: GraphVisualizati
             source: edge.source,
             target: edge.target,
             label: edge.type,
-            color: "#c4a882",
+            color: "#8aa4f0",
         }))
 
         return { nodes, links }
@@ -89,7 +89,7 @@ export function GraphVisualization({ graphData, height = 500 }: GraphVisualizati
             if (highlightedNode === node.id) {
                 ctx.beginPath()
                 ctx.arc(node.x, node.y, radius + 3, 0, 2 * Math.PI)
-                ctx.strokeStyle = "#3d3630"
+                ctx.strokeStyle = "#1e2a3a"
                 ctx.lineWidth = 2
                 ctx.stroke()
             }
@@ -109,7 +109,7 @@ export function GraphVisualization({ graphData, height = 500 }: GraphVisualizati
             // Draw label text
             ctx.textAlign = "center"
             ctx.textBaseline = "middle"
-            ctx.fillStyle = "#3d3630"
+            ctx.fillStyle = "#1e2a3a"
             ctx.fillText(label, node.x, node.y + radius + 2 + bckgDimensions[1] / 2)
         },
         [highlightedNode]
@@ -138,7 +138,7 @@ export function GraphVisualization({ graphData, height = 500 }: GraphVisualizati
 
             ctx.textAlign = "center"
             ctx.textBaseline = "middle"
-            ctx.fillStyle = "#8a8279"
+            ctx.fillStyle = "#6b7d99"
             ctx.fillText(link.label, textPos.x, textPos.y)
         },
         []
@@ -156,7 +156,7 @@ export function GraphVisualization({ graphData, height = 500 }: GraphVisualizati
         <div className="space-y-3">
             {/* Legend */}
             <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-[#8a8279] font-medium">Legend:</span>
+                <span className="text-xs text-[#6b7d99] font-medium">Legend:</span>
                 {nodeTypeCounts.map(({ type }) => (
                     <button
                         key={type}
@@ -164,24 +164,24 @@ export function GraphVisualization({ graphData, height = 500 }: GraphVisualizati
                         className="flex items-center gap-1.5 text-xs"
                     >
                         <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getNodeColor(type) }} />
-                        <span className="text-[#3d3630]">{type}</span>
+                        <span className="text-[#1e2a3a]">{type}</span>
                     </button>
                 ))}
-                <Badge variant="outline" className="ml-auto text-[10px] border-[#e5e0d8] text-[#8a8279]">
+                <Badge variant="outline" className="ml-auto text-[10px] border-[#d0d9e8] text-[#6b7d99]">
                     Click node to highlight • Scroll to zoom • Drag to pan
                 </Badge>
             </div>
 
             {/* Graph */}
             <div
-                className="rounded-xl border border-[#e5e0d8] bg-[#faf6f1] overflow-hidden"
+                className="rounded-xl border border-[#d0d9e8] bg-[#eef2f7] overflow-hidden"
                 style={{ height }}
             >
                 <ForceGraph2D
                     graphData={data}
                     nodeCanvasObject={nodeCanvasObject}
                     linkCanvasObject={linkCanvasObject}
-                    linkColor={() => "#c4a882"}
+                    linkColor={() => "#8aa4f0"}
                     linkWidth={1}
                     linkDirectionalArrowLength={4}
                     linkDirectionalArrowRelPos={1}
@@ -191,28 +191,28 @@ export function GraphVisualization({ graphData, height = 500 }: GraphVisualizati
                     cooldownTicks={50}
                     d3AlphaDecay={0.02}
                     d3VelocityDecay={0.3}
-                    backgroundColor="#faf6f1"
+                    backgroundColor="#eef2f7"
                 />
             </div>
 
             {/* Selected node info */}
             {highlightedNode && (
-                <div className="rounded-lg border border-[#e5e0d8] bg-[#fdfcf9] p-3">
+                <div className="rounded-lg border border-[#d0d9e8] bg-[#ffffff] p-3">
                     {(() => {
                         const node = graphData.nodes.find((n) => n.id === highlightedNode)
                         if (!node) return null
                         return (
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-[#3d3630]">{node.label}</span>
-                                    <Badge variant="secondary" className="bg-[#f0e6c8]/60 text-[#8b7355]">{node.type}</Badge>
+                                    <span className="text-sm font-medium text-[#1e2a3a]">{node.label}</span>
+                                    <Badge variant="secondary" className="bg-[#dbe4f5]/60 text-[#5b7cfa]">{node.type}</Badge>
                                 </div>
-                                <p className="text-xs text-[#8a8279] font-mono">{node.id}</p>
+                                <p className="text-xs text-[#6b7d99] font-mono">{node.id}</p>
                                 {Object.keys(node.properties).length > 0 && (
-                                    <div className="grid gap-1 pt-1 border-t border-[#e5e0d8]">
+                                    <div className="grid gap-1 pt-1 border-t border-[#d0d9e8]">
                                         {Object.entries(node.properties).map(([key, value]) => (
-                                            <p key={key} className="text-xs text-[#8a8279]">
-                                                <span className="font-medium text-[#3d3630]/80">{key}:</span>{" "}
+                                            <p key={key} className="text-xs text-[#6b7d99]">
+                                                <span className="font-medium text-[#1e2a3a]/80">{key}:</span>{" "}
                                                 {value ?? "null"}
                                             </p>
                                         ))}

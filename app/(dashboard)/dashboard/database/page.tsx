@@ -22,21 +22,21 @@ export default async function DatabaseBrowsePage() {
 
     return (
         <>
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#e5e0d8] bg-[#fdfcf9]">
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#d0d9e8] bg-[#ffffff]">
                 <div className="flex items-center gap-2 px-6">
-                    <SidebarTrigger className="-ml-1 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/40" />
+                    <SidebarTrigger aria-label="Toggle sidebar" className="-ml-1 text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/40" />
                     <Separator
                         orientation="vertical"
-                        className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]"
+                        className="mr-2 data-[orientation=vertical]:h-4 bg-[#d0d9e8]"
                     />
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/dashboard" className="text-[#8a8279] hover:text-[#3d3630]">Dashboard</BreadcrumbLink>
+                                <BreadcrumbLink href="/dashboard" className="text-[#6b7d99] hover:text-[#1e2a3a]">Dashboard</BreadcrumbLink>
                             </BreadcrumbItem>
-                            <BreadcrumbSeparator className="hidden md:block text-[#e5e0d8]" />
+                            <BreadcrumbSeparator className="hidden md:block text-[#d0d9e8]" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage className="text-[#3d3630] font-medium">Browse Documents</BreadcrumbPage>
+                                <BreadcrumbPage className="text-[#1e2a3a] font-medium">Browse Documents</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -45,8 +45,8 @@ export default async function DatabaseBrowsePage() {
             <div className="flex flex-1 flex-col gap-4 p-6 pt-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-[#3d3630]">Browse Documents</h1>
-                        <p className="text-[#8a8279] text-sm mt-1">
+                        <h1 className="text-2xl font-bold tracking-tight text-[#1e2a3a]">Browse Documents</h1>
+                        <p className="text-[#6b7d99] text-sm mt-1">
                             View and manage all embedded documents in the vector database
                         </p>
                     </div>

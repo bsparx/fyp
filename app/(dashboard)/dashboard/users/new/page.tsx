@@ -163,43 +163,43 @@ export default function NewUserPage() {
     const passwordStrength = getPasswordStrength(formData.password)
 
     const requirementClass = (met: boolean) =>
-        met ? "text-[#8fa68e]" : "text-[#8a8279]"
+        met ? "text-[#4ade80]" : "text-[#6b7d99]"
 
     return (
         <>
             <PageTitle title="Create User" />
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#e5e0d8] bg-[#fdfcf9]">
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#d0d9e8] bg-[#ffffff]">
                 <div className="flex items-center gap-2 px-6">
-                    <SidebarTrigger className="-ml-1 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/40" />
-                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]" />
+                    <SidebarTrigger aria-label="Toggle sidebar" className="-ml-1 text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/40" />
+                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4 bg-[#d0d9e8]" />
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/dashboard" className="text-[#8a8279] hover:text-[#3d3630]">Dashboard</BreadcrumbLink>
+                                <BreadcrumbLink href="/dashboard" className="text-[#6b7d99] hover:text-[#1e2a3a]">Dashboard</BreadcrumbLink>
                             </BreadcrumbItem>
-                            <BreadcrumbSeparator className="hidden md:block text-[#e5e0d8]" />
+                            <BreadcrumbSeparator className="hidden md:block text-[#d0d9e8]" />
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/dashboard/users" className="text-[#8a8279] hover:text-[#3d3630]">Users</BreadcrumbLink>
+                                <BreadcrumbLink href="/dashboard/users" className="text-[#6b7d99] hover:text-[#1e2a3a]">Users</BreadcrumbLink>
                             </BreadcrumbItem>
-                            <BreadcrumbSeparator className="hidden md:block text-[#e5e0d8]" />
+                            <BreadcrumbSeparator className="hidden md:block text-[#d0d9e8]" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage className="text-[#3d3630] font-medium">Create User</BreadcrumbPage>
+                                <BreadcrumbPage className="text-[#1e2a3a] font-medium">Create User</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
                 </div>
             </header>
 
-            <div className="flex flex-1 flex-col gap-6 p-6 pt-4 bg-[#faf6f1]">
+            <div className="flex flex-1 flex-col gap-6 p-6 pt-4 bg-[#eef2f7]">
                 <div className="flex items-center gap-4">
                     <Link href="/dashboard/users">
-                        <Button variant="ghost" size="icon" className="text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/30">
+                        <Button variant="ghost" size="icon" className="text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/30" aria-label="Go back to users">
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
                     </Link>
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-[#3d3630]">Create New User</h1>
-                        <p className="text-[#8a8279] mt-1 text-sm">
+                        <h1 className="text-2xl font-bold tracking-tight text-[#1e2a3a]">Create New User</h1>
+                        <p className="text-[#6b7d99] mt-1 text-sm">
                             Add a new user to your hospital management system.
                         </p>
                     </div>
@@ -207,19 +207,19 @@ export default function NewUserPage() {
 
                 <div className="max-w-2xl">
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="rounded-xl border border-[#e5e0d8] bg-[#fdfcf9] p-6 shadow-sm">
-                            <h2 className="text-lg font-semibold mb-4 text-[#3d3630]">User Information</h2>
+                        <div className="rounded-xl border border-[#d0d9e8] bg-[#ffffff] p-6 shadow-sm">
+                            <h2 className="text-lg font-semibold mb-4 text-[#1e2a3a]">User Information</h2>
 
                             <div className="space-y-4">
                                 {/* Username Field */}
                                 <div className="space-y-2">
-                                    <label htmlFor="username" className="text-sm font-medium text-[#3d3630]">Username</label>
+                                    <label htmlFor="username" className="text-sm font-medium text-[#1e2a3a]">Username</label>
                                     <div className="relative">
-                                        <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8279]" />
+                                        <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7d99]" />
                                         <Input
                                             id="username" name="username" placeholder="Enter username"
                                             value={formData.username} onChange={handleInputChange}
-                                            className={`pl-9 bg-[#fdfcf9] border-[#e5e0d8] text-[#3d3630] placeholder:text-[#8a8279]/60 ${errors.username ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                                            className={`pl-9 bg-[#ffffff] border-[#d0d9e8] text-[#1e2a3a] placeholder:text-[#6b7d99]/60 ${errors.username ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                                         />
                                     </div>
                                     {errors.username && <p className="text-sm text-red-500">{errors.username}</p>}
@@ -227,13 +227,13 @@ export default function NewUserPage() {
 
                                 {/* Email Field */}
                                 <div className="space-y-2">
-                                    <label htmlFor="email" className="text-sm font-medium text-[#3d3630]">Email Address</label>
+                                    <label htmlFor="email" className="text-sm font-medium text-[#1e2a3a]">Email Address</label>
                                     <div className="relative">
-                                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8279]" />
+                                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7d99]" />
                                         <Input
                                             id="email" name="email" type="email" placeholder="Enter email address"
                                             value={formData.email} onChange={handleInputChange}
-                                            className={`pl-9 bg-[#fdfcf9] border-[#e5e0d8] text-[#3d3630] placeholder:text-[#8a8279]/60 ${errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                                            className={`pl-9 bg-[#ffffff] border-[#d0d9e8] text-[#1e2a3a] placeholder:text-[#6b7d99]/60 ${errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                                         />
                                     </div>
                                     {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
@@ -241,23 +241,23 @@ export default function NewUserPage() {
 
                                 {/* Role Field */}
                                 <div className="space-y-2">
-                                    <label htmlFor="role" className="text-sm font-medium text-[#3d3630]">Role</label>
+                                    <label htmlFor="role" className="text-sm font-medium text-[#1e2a3a]">Role</label>
                                     <div className="relative">
-                                        <Shield className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8279] z-10 pointer-events-none" />
+                                        <Shield className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7d99] z-10 pointer-events-none" />
                                         <Select value={formData.role} onValueChange={handleRoleChange}>
-                                            <SelectTrigger className={`pl-9 bg-[#fdfcf9] border-[#e5e0d8] text-[#3d3630] ${errors.role ? "border-red-500" : ""}`}>
+                                            <SelectTrigger className={`pl-9 bg-[#ffffff] border-[#d0d9e8] text-[#1e2a3a] ${errors.role ? "border-red-500" : ""}`}>
                                                 <SelectValue placeholder="Select a role" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="DOCTOR">
-                                                    <div className="flex items-center gap-2 text-[#3d3630]">
-                                                        <span className="inline-flex h-2 w-2 rounded-full bg-[#7a9eaf]" />
+                                                    <div className="flex items-center gap-2 text-[#1e2a3a]">
+                                                        <span className="inline-flex h-2 w-2 rounded-full bg-[#38bdf8]" />
                                                         Doctor
                                                     </div>
                                                 </SelectItem>
                                                 <SelectItem value="PATIENT">
-                                                    <div className="flex items-center gap-2 text-[#3d3630]">
-                                                        <span className="inline-flex h-2 w-2 rounded-full bg-[#8fa68e]" />
+                                                    <div className="flex items-center gap-2 text-[#1e2a3a]">
+                                                        <span className="inline-flex h-2 w-2 rounded-full bg-[#4ade80]" />
                                                         Patient
                                                     </div>
                                                 </SelectItem>
@@ -269,28 +269,28 @@ export default function NewUserPage() {
 
                                 {/* Password Field */}
                                 <div className="space-y-2">
-                                    <label htmlFor="password" className="text-sm font-medium text-[#3d3630]">Password</label>
+                                    <label htmlFor="password" className="text-sm font-medium text-[#1e2a3a]">Password</label>
                                     <div className="flex gap-2">
                                         <div className="relative flex-1">
-                                            <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8279]" />
+                                            <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7d99]" />
                                             <Input
                                                 id="password" name="password" type={showPassword ? "text" : "password"}
                                                 placeholder="Enter password"
                                                 value={formData.password} onChange={handleInputChange}
-                                                className={`pl-9 pr-20 bg-[#fdfcf9] border-[#e5e0d8] text-[#3d3630] placeholder:text-[#8a8279]/60 ${errors.password ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                                                className={`pl-9 pr-20 bg-[#ffffff] border-[#d0d9e8] text-[#1e2a3a] placeholder:text-[#6b7d99]/60 ${errors.password ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                                             />
                                             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                                                 {formData.password && (
-                                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-[#8a8279] hover:text-[#3d3630]" onClick={handleCopyPassword}>
-                                                        {copied ? <Check className="h-3.5 w-3.5 text-[#8fa68e]" /> : <Copy className="h-3.5 w-3.5" />}
+                                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-[#6b7d99] hover:text-[#1e2a3a]" onClick={handleCopyPassword} aria-label="Copy password">
+                                                        {copied ? <Check className="h-3.5 w-3.5 text-[#4ade80]" /> : <Copy className="h-3.5 w-3.5" />}
                                                     </Button>
                                                 )}
-                                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-[#8a8279] hover:text-[#3d3630]" onClick={() => setShowPassword(!showPassword)}>
+                                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-[#6b7d99] hover:text-[#1e2a3a]" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
                                                     {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                 </Button>
                                             </div>
                                         </div>
-                                        <Button type="button" variant="outline" onClick={handleGeneratePassword} className="gap-2 shrink-0 border-[#e5e0d8] text-[#3d3630] hover:bg-[#f0e6c8]/30">
+                                        <Button type="button" variant="outline" onClick={handleGeneratePassword} className="gap-2 shrink-0 border-[#d0d9e8] text-[#1e2a3a] hover:bg-[#dbe4f5]/30">
                                             <RefreshCw className="h-4 w-4" />
                                             Generate
                                         </Button>
@@ -301,11 +301,11 @@ export default function NewUserPage() {
                                         <div className="space-y-2">
                                             <div className="flex gap-1">
                                                 {[1, 2, 3].map((level) => (
-                                                    <div key={level} className={`h-1.5 flex-1 rounded-full transition-colors ${level <= passwordStrength.strength ? passwordStrength.color : "bg-[#e8e4e0]"}`} />
+                                                    <div key={level} className={`h-1.5 flex-1 rounded-full transition-colors ${level <= passwordStrength.strength ? passwordStrength.color : "bg-[#dce3f0]"}`} />
                                                 ))}
                                             </div>
-                                            <p className="text-xs text-[#8a8279]">
-                                                Password strength: <span className="font-medium text-[#3d3630]">{passwordStrength.label}</span>
+                                            <p className="text-xs text-[#6b7d99]">
+                                                Password strength: <span className="font-medium text-[#1e2a3a]">{passwordStrength.label}</span>
                                             </p>
                                         </div>
                                     )}
@@ -314,9 +314,9 @@ export default function NewUserPage() {
                         </div>
 
                         {/* Info Box */}
-                        <div className="rounded-xl border border-[#e5e0d8] bg-[#f5f0eb]/50 p-4">
-                            <h3 className="font-medium text-sm mb-2 text-[#3d3630]">Password Requirements</h3>
-                            <ul className="text-sm text-[#8a8279] space-y-1">
+                        <div className="rounded-xl border border-[#d0d9e8] bg-[#e3e8f2]/50 p-4">
+                            <h3 className="font-medium text-sm mb-2 text-[#1e2a3a]">Password Requirements</h3>
+                            <ul className="text-sm text-[#6b7d99] space-y-1">
                                 <li className={requirementClass(formData.password.length >= 8)}>• At least 8 characters long</li>
                                 <li className={requirementClass(/[A-Z]/.test(formData.password))}>• Contains uppercase letter</li>
                                 <li className={requirementClass(/[a-z]/.test(formData.password))}>• Contains lowercase letter</li>
@@ -327,7 +327,7 @@ export default function NewUserPage() {
 
                         {/* Form Actions */}
                         <div className="flex items-center gap-4">
-                            <Button type="submit" disabled={isLoading} className="min-w-32 bg-[#8b7355] hover:bg-[#6b5a42] text-white">
+                            <Button type="submit" disabled={isLoading} className="min-w-32 bg-[#5b7cfa] hover:bg-[#4a5fd9] text-white">
                                 {isLoading ? (
                                     <><RefreshCw className="mr-2 h-4 w-4 animate-spin" />Creating...</>
                                 ) : (
@@ -335,7 +335,7 @@ export default function NewUserPage() {
                                 )}
                             </Button>
                             <Link href="/dashboard/users">
-                                <Button type="button" variant="outline" className="border-[#e5e0d8] text-[#3d3630] hover:bg-[#f0e6c8]/30">Cancel</Button>
+                                <Button type="button" variant="outline" className="border-[#d0d9e8] text-[#1e2a3a] hover:bg-[#dbe4f5]/30">Cancel</Button>
                             </Link>
                         </div>
                     </form>

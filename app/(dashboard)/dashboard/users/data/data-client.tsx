@@ -119,38 +119,38 @@ export default function DataClient({ initialUsers }: DataClientProps) {
 
     return (
         <>
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#e5e0d8] bg-[#fdfcf9]">
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#d0d9e8] bg-[#ffffff]">
                 <div className="flex items-center gap-2 px-6">
-                    <SidebarTrigger className="-ml-1 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/40" />
-                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]" />
+                    <SidebarTrigger aria-label="Toggle sidebar" className="-ml-1 text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/40" />
+                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4 bg-[#d0d9e8]" />
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/dashboard" className="text-[#8a8279] hover:text-[#3d3630]">Dashboard</BreadcrumbLink>
+                                <BreadcrumbLink href="/dashboard" className="text-[#6b7d99] hover:text-[#1e2a3a]">Dashboard</BreadcrumbLink>
                             </BreadcrumbItem>
-                            <BreadcrumbSeparator className="hidden md:block text-[#e5e0d8]" />
+                            <BreadcrumbSeparator className="hidden md:block text-[#d0d9e8]" />
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/dashboard/users" className="text-[#8a8279] hover:text-[#3d3630]">Users</BreadcrumbLink>
+                                <BreadcrumbLink href="/dashboard/users" className="text-[#6b7d99] hover:text-[#1e2a3a]">Users</BreadcrumbLink>
                             </BreadcrumbItem>
-                            <BreadcrumbSeparator className="hidden md:block text-[#e5e0d8]" />
+                            <BreadcrumbSeparator className="hidden md:block text-[#d0d9e8]" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage className="text-[#3d3630] font-medium">User Data</BreadcrumbPage>
+                                <BreadcrumbPage className="text-[#1e2a3a] font-medium">User Data</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
                 </div>
             </header>
 
-            <div className="flex flex-1 flex-col gap-6 p-6 pt-4 bg-[#faf6f1]">
+            <div className="flex flex-1 flex-col gap-6 p-6 pt-4 bg-[#eef2f7]">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-[#3d3630]">User Data</h1>
-                        <p className="text-[#8a8279] mt-1 text-sm">
+                        <h1 className="text-2xl font-bold tracking-tight text-[#1e2a3a]">User Data</h1>
+                        <p className="text-[#6b7d99] mt-1 text-sm">
                             View and manage documents for all users in the system.
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={handleRefresh} className="border-[#e5e0d8] bg-[#fdfcf9] text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/30">
+                        <Button variant="outline" onClick={handleRefresh} className="border-[#d0d9e8] bg-[#ffffff] text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/30">
                             <RefreshCw className="h-4 w-4 mr-2" />
                             Refresh
                         </Button>
@@ -159,7 +159,7 @@ export default function DataClient({ initialUsers }: DataClientProps) {
 
                 {/* Search */}
                 <div className="relative max-w-sm">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8279]" />
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7d99]" />
                     <Input
                         ref={searchInputRef}
                         placeholder="Search users by name, email, or role... (press /)"
@@ -168,18 +168,18 @@ export default function DataClient({ initialUsers }: DataClientProps) {
                             setSearchQuery(e.target.value)
                             setCurrentPage(1)
                         }}
-                        className="pl-9 bg-[#fdfcf9] border-[#e5e0d8] text-[#3d3630] placeholder:text-[#8a8279]/60"
+                        className="pl-9 bg-[#ffffff] border-[#d0d9e8] text-[#1e2a3a] placeholder:text-[#6b7d99]/60"
                     />
                 </div>
 
                 {/* User Cards Grid */}
                 {paginatedUsers.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-[#e5e0d8] bg-[#fdfcf9]">
-                        <FileText className="h-12 w-12 text-[#8a8279]/40 mb-4" />
-                        <p className="text-[#3d3630] font-medium">
+                    <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-[#d0d9e8] bg-[#ffffff]">
+                        <FileText className="h-12 w-12 text-[#6b7d99]/40 mb-4" />
+                        <p className="text-[#1e2a3a] font-medium">
                             {users.length === 0 ? "No users found." : "No users found matching your search."}
                         </p>
-                        <p className="text-sm text-[#8a8279] mt-1">
+                        <p className="text-sm text-[#6b7d99] mt-1">
                             {users.length === 0 ? "Create users first to see their data here." : "Try a different search term."}
                         </p>
                     </div>
@@ -189,7 +189,7 @@ export default function DataClient({ initialUsers }: DataClientProps) {
                             const meta = roleMeta[user.role]
                             return (
                                 <Link key={user.id} href={`/dashboard/users/${user.id}/data`} className="group">
-                                    <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm hover:shadow-md hover:border-[#c4a882]/30 transition-all duration-200 overflow-hidden">
+                                    <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm hover:shadow-md hover:border-[#8aa4f0]/30 transition-all duration-200 overflow-hidden">
                                         <CardContent className="p-0">
                                             <div className={`h-1.5 w-full bg-gradient-to-r ${meta.gradient}`} />
                                             <div className="p-5">
@@ -197,15 +197,15 @@ export default function DataClient({ initialUsers }: DataClientProps) {
                                                     <div className={`flex h-12 w-12 items-center justify-center rounded-full ${meta.badge.split(" ")[0]} font-medium text-lg`}>
                                                         <meta.icon className="size-5" />
                                                     </div>
-                                                    <div className="flex items-center gap-1 text-sm text-[#8a8279] bg-[#f5f0eb] rounded-full px-2.5 py-1">
+                                                    <div className="flex items-center gap-1 text-sm text-[#6b7d99] bg-[#e3e8f2] rounded-full px-2.5 py-1">
                                                         <FileText className="h-3.5 w-3.5" />
                                                         <span className="font-medium">{user._count.documents}</span>
                                                     </div>
                                                 </div>
-                                                <h3 className="font-semibold text-lg mb-1 truncate text-[#3d3630]">
+                                                <h3 className="font-semibold text-lg mb-1 truncate text-[#1e2a3a]">
                                                     {user.name || "Unnamed User"}
                                                 </h3>
-                                                <p className="text-sm text-[#8a8279] truncate mb-3">
+                                                <p className="text-sm text-[#6b7d99] truncate mb-3">
                                                     {user.email}
                                                 </p>
                                                 <Badge variant="outline" className={`text-xs font-medium ${meta.badge}`}>
@@ -223,7 +223,7 @@ export default function DataClient({ initialUsers }: DataClientProps) {
                 {/* Pagination */}
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between">
-                        <p className="text-sm text-[#8a8279]">
+                        <p className="text-sm text-[#6b7d99]">
                             Page {currentPage} of {totalPages} • {filteredUsers.length} users total
                         </p>
                         <div className="flex items-center gap-2">
@@ -231,7 +231,7 @@ export default function DataClient({ initialUsers }: DataClientProps) {
                                 variant="outline" size="sm"
                                 onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                                 disabled={currentPage === 1}
-                                className="border-[#e5e0d8] text-[#3d3630] hover:bg-[#f0e6c8]/30"
+                                className="border-[#d0d9e8] text-[#1e2a3a] hover:bg-[#dbe4f5]/30"
                             >
                                 <ChevronLeft className="h-4 w-4" />
                                 Previous
@@ -240,7 +240,7 @@ export default function DataClient({ initialUsers }: DataClientProps) {
                                 variant="outline" size="sm"
                                 onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages}
-                                className="border-[#e5e0d8] text-[#3d3630] hover:bg-[#f0e6c8]/30"
+                                className="border-[#d0d9e8] text-[#1e2a3a] hover:bg-[#dbe4f5]/30"
                             >
                                 Next
                                 <ChevronRight className="h-4 w-4" />

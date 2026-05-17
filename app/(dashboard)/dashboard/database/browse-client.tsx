@@ -189,12 +189,12 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
     };
 
     return (
-        <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+        <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
             <CardHeader>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <CardTitle className="text-[#3d3630]">Documents</CardTitle>
-                        <CardDescription className="text-[#8a8279]">
+                        <CardTitle className="text-[#1e2a3a]">Documents</CardTitle>
+                        <CardDescription className="text-[#6b7d99]">
                             {filteredDocuments.length} of {documents.length} document{documents.length !== 1 ? "s" : ""} in the database
                         </CardDescription>
                     </div>
@@ -202,49 +202,49 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                         <Button
                             variant="outline"
                             size="sm"
-                            className="gap-1 border-[#e5e0d8] text-[#3d3630] hover:bg-[#f0e6c8]/30"
+                            className="gap-1 border-[#d0d9e8] text-[#1e2a3a] hover:bg-[#dbe4f5]/30"
                             onClick={() => void openDomainGraph("medicine")}
                             disabled={isGraphLoading}
                         >
-                            <Network className="h-3.5 w-3.5 text-[#7a9eaf]" />
+                            <Network className="h-3.5 w-3.5 text-[#38bdf8]" />
                             Medicine Graph
                         </Button>
                         <Button
                             variant="outline"
                             size="sm"
-                            className="gap-1 border-[#e5e0d8] text-[#3d3630] hover:bg-[#f0e6c8]/30"
+                            className="gap-1 border-[#d0d9e8] text-[#1e2a3a] hover:bg-[#dbe4f5]/30"
                             onClick={() => void openDomainGraph("disease")}
                             disabled={isGraphLoading}
                         >
-                            <Network className="h-3.5 w-3.5 text-[#c49a6c]" />
+                            <Network className="h-3.5 w-3.5 text-[#8aa4f0]" />
                             Disease Graph
                         </Button>
                         <Select value={typeFilter} onValueChange={(value: TypeFilter) => setTypeFilter(value)}>
-                            <SelectTrigger className="w-[140px] border-[#e5e0d8] bg-[#fdfcf9]">
+                            <SelectTrigger className="w-[140px] border-[#d0d9e8] bg-[#ffffff]">
                                 <SelectValue placeholder="Filter by type" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ALL">All Types</SelectItem>
                                 <SelectItem value="MEDICINE">
-                                    <span className="flex items-center gap-2 text-[#3d3630]">
-                                        <Pill className="h-3.5 w-3.5 text-[#7a9eaf]" />
+                                    <span className="flex items-center gap-2 text-[#1e2a3a]">
+                                        <Pill className="h-3.5 w-3.5 text-[#38bdf8]" />
                                         Medicine
                                     </span>
                                 </SelectItem>
                                 <SelectItem value="DISEASE">
-                                    <span className="flex items-center gap-2 text-[#3d3630]">
-                                        <Activity className="h-3.5 w-3.5 text-[#c49a6c]" />
+                                    <span className="flex items-center gap-2 text-[#1e2a3a]">
+                                        <Activity className="h-3.5 w-3.5 text-[#8aa4f0]" />
                                         Disease
                                     </span>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
                         <div className="relative w-64">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[#8a8279]" />
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[#6b7d99]" />
                             <Input
                                 type="search"
                                 placeholder="Filter documents..."
-                                className="pl-8 border-[#e5e0d8] bg-[#fdfcf9] text-[#3d3630] placeholder:text-[#8a8279]/60"
+                                className="pl-8 border-[#d0d9e8] bg-[#ffffff] text-[#1e2a3a] placeholder:text-[#6b7d99]/60"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
@@ -255,37 +255,37 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
             <CardContent>
                 {filteredDocuments.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
-                        <FileText className="h-12 w-12 text-[#8a8279]/40 mb-4" />
-                        <h3 className="text-lg font-semibold text-[#3d3630]">No documents found</h3>
-                        <p className="text-sm text-[#8a8279] mt-1">
+                        <FileText className="h-12 w-12 text-[#6b7d99]/40 mb-4" />
+                        <h3 className="text-lg font-semibold text-[#1e2a3a]">No documents found</h3>
+                        <p className="text-sm text-[#6b7d99] mt-1">
                             {searchQuery ? "Try a different search query" : "Upload documents to get started"}
                         </p>
                     </div>
                 ) : (
-                    <div className="rounded-xl border border-[#e5e0d8] overflow-hidden">
+                    <div className="rounded-xl border border-[#d0d9e8] overflow-hidden">
                         <Table>
                             <TableHeader>
-                                <TableRow className="border-[#e5e0d8] hover:bg-transparent bg-[#f5f0eb]/50">
-                                    <TableHead className="text-[#8a8279] font-medium">Title</TableHead>
-                                    <TableHead className="text-[#8a8279] font-medium">Type</TableHead>
-                                    <TableHead className="text-[#8a8279] font-medium">Status</TableHead>
-                                    <TableHead className="text-[#8a8279] font-medium text-right">Parent Chunks</TableHead>
-                                    <TableHead className="text-[#8a8279] font-medium text-right">RAG Chunks</TableHead>
-                                    <TableHead className="text-[#8a8279] font-medium">Created</TableHead>
+                                <TableRow className="border-[#d0d9e8] hover:bg-transparent bg-[#e3e8f2]/50">
+                                    <TableHead className="text-[#6b7d99] font-medium">Title</TableHead>
+                                    <TableHead className="text-[#6b7d99] font-medium">Type</TableHead>
+                                    <TableHead className="text-[#6b7d99] font-medium">Status</TableHead>
+                                    <TableHead className="text-[#6b7d99] font-medium text-right">Parent Chunks</TableHead>
+                                    <TableHead className="text-[#6b7d99] font-medium text-right">RAG Chunks</TableHead>
+                                    <TableHead className="text-[#6b7d99] font-medium">Created</TableHead>
                                     <TableHead className="w-[70px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {filteredDocuments.map((doc) => (
-                                    <TableRow key={doc.id} className="border-[#e5e0d8]/60 hover:bg-[#f5f0eb]/50 transition-colors">
+                                    <TableRow key={doc.id} className="border-[#d0d9e8]/60 hover:bg-[#e3e8f2]/50 transition-colors">
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <div className="rounded-lg bg-[#f0e6c8]/40 p-2 shrink-0">
-                                                    <FileText className="h-4 w-4 text-[#8b7355]" />
+                                                <div className="rounded-lg bg-[#dbe4f5]/40 p-2 shrink-0">
+                                                    <FileText className="h-4 w-4 text-[#5b7cfa]" />
                                                 </div>
                                                 <div>
-                                                    <div className="font-medium text-[#3d3630]">{truncateText(doc.title, 40)}</div>
-                                                    <div className="text-xs text-[#8a8279]">
+                                                    <div className="font-medium text-[#1e2a3a]">{truncateText(doc.title, 40)}</div>
+                                                    <div className="text-xs text-[#6b7d99]">
                                                         {truncateText(doc.content, 60)}
                                                     </div>
                                                 </div>
@@ -293,56 +293,56 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                                         </TableCell>
                                         <TableCell>
                                             {doc.ragSubtype === "MEDICINE" ? (
-                                                <Badge variant="outline" className="gap-1 text-[#7a9eaf] border-[#7a9eaf]/30 bg-[#7a9eaf]/10">
+                                                <Badge variant="outline" className="gap-1 text-[#38bdf8] border-[#38bdf8]/30 bg-[#38bdf8]/10">
                                                     <Pill className="h-3 w-3" />
                                                     Medicine
                                                 </Badge>
                                             ) : doc.ragSubtype === "DISEASE" ? (
-                                                <Badge variant="outline" className="gap-1 text-[#c49a6c] border-[#c49a6c]/30 bg-[#c49a6c]/10">
+                                                <Badge variant="outline" className="gap-1 text-[#8aa4f0] border-[#8aa4f0]/30 bg-[#8aa4f0]/10">
                                                     <Activity className="h-3 w-3" />
                                                     Disease
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="text-[#8a8279] border-[#e5e0d8]">Unknown</Badge>
+                                                <Badge variant="outline" className="text-[#6b7d99] border-[#d0d9e8]">Unknown</Badge>
                                             )}
                                         </TableCell>
                                         <TableCell>
                                             {doc.isIngested ? (
-                                                <Badge variant="outline" className="gap-1 text-[#8fa68e] border-[#8fa68e]/30 bg-[#8fa68e]/10">
+                                                <Badge variant="outline" className="gap-1 text-[#4ade80] border-[#4ade80]/30 bg-[#4ade80]/10">
                                                     <CheckCircle className="h-3 w-3" />
                                                     Ingested
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="gap-1 text-[#c49a6c] border-[#c49a6c]/30 bg-[#c49a6c]/10">
+                                                <Badge variant="outline" className="gap-1 text-[#8aa4f0] border-[#8aa4f0]/30 bg-[#8aa4f0]/10">
                                                     <XCircle className="h-3 w-3" />
                                                     Pending
                                                 </Badge>
                                             )}
                                         </TableCell>
-                                        <TableCell className="text-right font-mono text-[#3d3630]">
+                                        <TableCell className="text-right font-mono text-[#1e2a3a]">
                                             {doc._count.parentChunks}
                                         </TableCell>
-                                        <TableCell className="text-right font-mono text-[#3d3630]">
+                                        <TableCell className="text-right font-mono text-[#1e2a3a]">
                                             {doc._count.ragChunks}
                                         </TableCell>
-                                        <TableCell className="text-[#8a8279]">{formatDate(doc.createdAt)}</TableCell>
+                                        <TableCell className="text-[#6b7d99]">{formatDate(doc.createdAt)}</TableCell>
                                         <TableCell>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/30">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/30" aria-label="Open actions menu">
                                                         <MoreHorizontal className="h-4 w-4" />
                                                         <span className="sr-only">Open menu</span>
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuItem onSelect={(event) => { event.preventDefault(); void openDocumentGraph(doc); }}>
-                                                        <Network className="mr-2 h-4 w-4 text-[#7a9eaf]" />
+                                                        <Network className="mr-2 h-4 w-4 text-[#38bdf8]" />
                                                         View Graph
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem
                                                         onSelect={(event) => { event.preventDefault(); setPreviewDoc(doc); setPreviewOpen(true); }}
                                                     >
-                                                        <Eye className="mr-2 h-4 w-4 text-[#7a9eaf]" />
+                                                        <Eye className="mr-2 h-4 w-4 text-[#38bdf8]" />
                                                         View Content
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem
@@ -367,16 +367,16 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                 open={pendingDeleteDoc !== null}
                 onOpenChange={(open) => { if (!open) setPendingDeleteDoc(null); }}
             >
-                <AlertDialogContent className="border-[#e5e0d8] bg-[#fdfcf9]">
+                <AlertDialogContent className="border-[#d0d9e8] bg-[#ffffff]">
                     <AlertDialogHeader>
-                        <AlertDialogTitle className="text-[#3d3630]">Delete Document</AlertDialogTitle>
-                        <AlertDialogDescription className="text-[#8a8279]">
-                            Are you sure you want to delete <strong className="text-[#3d3630]">&quot;{pendingDeleteDoc?.title}&quot;</strong>? This will permanently remove the
+                        <AlertDialogTitle className="text-[#1e2a3a]">Delete Document</AlertDialogTitle>
+                        <AlertDialogDescription className="text-[#6b7d99]">
+                            Are you sure you want to delete <strong className="text-[#1e2a3a]">&quot;{pendingDeleteDoc?.title}&quot;</strong>? This will permanently remove the
                             document, SQL parent chunks, graph data, and embeddings from the vector database.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={Boolean(isDeleting)} className="border-[#e5e0d8]">Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={Boolean(isDeleting)} className="border-[#d0d9e8]">Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={confirmDelete}
                             disabled={!pendingDeleteDoc || isDeleting === pendingDeleteDoc.id}
@@ -395,16 +395,16 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                     if (!open) setGraphError(null);
                 }}
             >
-                <DialogContent className="max-h-[90vh] w-[95vw] max-w-6xl overflow-hidden border-[#e5e0d8] bg-[#fdfcf9]">
+                <DialogContent className="max-h-[90vh] w-[95vw] max-w-6xl overflow-hidden border-[#d0d9e8] bg-[#ffffff]">
                     <DialogHeader>
-                        <DialogTitle className="text-[#3d3630]">{graphTitle}</DialogTitle>
-                        <DialogDescription className="text-[#8a8279]">
+                        <DialogTitle className="text-[#1e2a3a]">{graphTitle}</DialogTitle>
+                        <DialogDescription className="text-[#6b7d99]">
                             Complete Neo4j graph view for this scope.
                         </DialogDescription>
                     </DialogHeader>
 
                     {isGraphLoading ? (
-                        <div className="flex min-h-[300px] items-center justify-center gap-2 text-[#8a8279]">
+                        <div className="flex min-h-[300px] items-center justify-center gap-2 text-[#6b7d99]">
                             <Loader2 className="h-5 w-5 animate-spin" />
                             Loading graph...
                         </div>
@@ -413,7 +413,7 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                             {graphError}
                         </div>
                     ) : !graphData ? (
-                        <div className="rounded-md border border-[#e5e0d8] p-4 text-sm text-[#8a8279]">
+                        <div className="rounded-md border border-[#d0d9e8] p-4 text-sm text-[#6b7d99]">
                             Select a graph to view.
                         </div>
                     ) : !graphData.enabled ? (
@@ -421,29 +421,29 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                             {graphData.message ?? "Neo4j is not configured in this environment."}
                         </div>
                     ) : !graphData.graphPresent ? (
-                        <div className="rounded-md border border-[#e5e0d8] p-4 text-sm text-[#8a8279]">
+                        <div className="rounded-md border border-[#d0d9e8] p-4 text-sm text-[#6b7d99]">
                             {graphData.message ?? "No graph data found for this scope yet."}
                         </div>
                     ) : (
                         <div className="space-y-4">
                             <div className="flex flex-wrap gap-2">
-                                <Badge variant="outline" className="border-[#e5e0d8] text-[#3d3630]">Nodes: {graphData.nodes.length}</Badge>
-                                <Badge variant="outline" className="border-[#e5e0d8] text-[#3d3630]">Relationships: {graphData.edges.length}</Badge>
+                                <Badge variant="outline" className="border-[#d0d9e8] text-[#1e2a3a]">Nodes: {graphData.nodes.length}</Badge>
+                                <Badge variant="outline" className="border-[#d0d9e8] text-[#1e2a3a]">Relationships: {graphData.edges.length}</Badge>
                                 {graphData.nodeTypeCounts.map((entry) => (
-                                    <Badge key={entry.type} variant="secondary" className="bg-[#f5f0eb] text-[#3d3630]">
+                                    <Badge key={entry.type} variant="secondary" className="bg-[#e3e8f2] text-[#1e2a3a]">
                                         {entry.type}: {entry.count}
                                     </Badge>
                                 ))}
                             </div>
 
                             <Tabs defaultValue="graph" className="w-full">
-                                <TabsList className="bg-[#f5f0eb]">
-                                    <TabsTrigger value="graph" className="data-[state=active]:bg-[#fdfcf9] data-[state=active]:text-[#3d3630]">
+                                <TabsList className="bg-[#e3e8f2]">
+                                    <TabsTrigger value="graph" className="data-[state=active]:bg-[#ffffff] data-[state=active]:text-[#1e2a3a]">
                                         <Network className="size-3 mr-1.5" />
                                         Graph
                                     </TabsTrigger>
-                                    <TabsTrigger value="nodes" className="data-[state=active]:bg-[#fdfcf9] data-[state=active]:text-[#3d3630]">Nodes ({graphData.nodes.length})</TabsTrigger>
-                                    <TabsTrigger value="edges" className="data-[state=active]:bg-[#fdfcf9] data-[state=active]:text-[#3d3630]">Relationships ({graphData.edges.length})</TabsTrigger>
+                                    <TabsTrigger value="nodes" className="data-[state=active]:bg-[#ffffff] data-[state=active]:text-[#1e2a3a]">Nodes ({graphData.nodes.length})</TabsTrigger>
+                                    <TabsTrigger value="edges" className="data-[state=active]:bg-[#ffffff] data-[state=active]:text-[#1e2a3a]">Relationships ({graphData.edges.length})</TabsTrigger>
                                 </TabsList>
 
                                 <TabsContent value="graph" className="mt-3">
@@ -451,20 +451,20 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                                 </TabsContent>
 
                                 <TabsContent value="nodes" className="mt-3">
-                                    <ScrollArea className="h-[55vh] rounded-md border border-[#e5e0d8] p-3 bg-[#fdfcf9]">
+                                    <ScrollArea className="h-[55vh] rounded-md border border-[#d0d9e8] p-3 bg-[#ffffff]">
                                         <div className="space-y-2">
                                             {graphData.nodes.map((node) => (
-                                                <div key={node.id} className="rounded-md border border-[#e5e0d8] bg-[#f5f0eb]/30 p-3">
+                                                <div key={node.id} className="rounded-md border border-[#d0d9e8] bg-[#e3e8f2]/30 p-3">
                                                     <div className="flex items-center justify-between gap-2">
-                                                        <p className="text-sm font-medium text-[#3d3630]">{node.label}</p>
-                                                        <Badge variant="secondary" className="bg-[#f0e6c8]/60 text-[#8b7355]">{node.type}</Badge>
+                                                        <p className="text-sm font-medium text-[#1e2a3a]">{node.label}</p>
+                                                        <Badge variant="secondary" className="bg-[#dbe4f5]/60 text-[#5b7cfa]">{node.type}</Badge>
                                                     </div>
-                                                    <p className="mt-1 break-all text-xs text-[#8a8279]">{node.id}</p>
+                                                    <p className="mt-1 break-all text-xs text-[#6b7d99]">{node.id}</p>
                                                     {Object.keys(node.properties).length > 0 && (
                                                         <div className="mt-2 grid gap-1">
                                                             {Object.entries(node.properties).map(([key, value]) => (
-                                                                <p key={`${node.id}-${key}`} className="break-all text-xs text-[#8a8279]">
-                                                                    <span className="font-medium text-[#3d3630]/80">{key}:</span>{" "}
+                                                                <p key={`${node.id}-${key}`} className="break-all text-xs text-[#6b7d99]">
+                                                                    <span className="font-medium text-[#1e2a3a]/80">{key}:</span>{" "}
                                                                     {value ?? "null"}
                                                                 </p>
                                                             ))}
@@ -477,14 +477,14 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
                                 </TabsContent>
 
                                 <TabsContent value="edges" className="mt-3">
-                                    <ScrollArea className="h-[55vh] rounded-md border border-[#e5e0d8] p-3 bg-[#fdfcf9]">
+                                    <ScrollArea className="h-[55vh] rounded-md border border-[#d0d9e8] p-3 bg-[#ffffff]">
                                         <div className="space-y-2">
                                             {graphData.edges.map((edge, index) => (
                                                 <div
                                                     key={`${edge.source}-${edge.type}-${edge.target}-${index}`}
-                                                    className="rounded-md border border-[#e5e0d8] bg-[#f5f0eb]/30 p-3"
+                                                    className="rounded-md border border-[#d0d9e8] bg-[#e3e8f2]/30 p-3"
                                                 >
-                                                    <p className="break-all font-mono text-xs text-[#3d3630]">
+                                                    <p className="break-all font-mono text-xs text-[#1e2a3a]">
                                                         {edge.source} -[{edge.type}]-&gt; {edge.target}
                                                     </p>
                                                 </div>
@@ -500,19 +500,19 @@ export function BrowseDocumentsClient({ documents: initialDocuments }: BrowseDoc
 
             {/* Content Preview Dialog */}
             <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-                <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-hidden border-[#e5e0d8] bg-[#fdfcf9]">
+                <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-hidden border-[#d0d9e8] bg-[#ffffff]">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-[#3d3630]">
-                            <ScrollText className="h-5 w-5 text-[#8b7355]" />
+                        <DialogTitle className="flex items-center gap-2 text-[#1e2a3a]">
+                            <ScrollText className="h-5 w-5 text-[#5b7cfa]" />
                             {previewDoc?.title}
                         </DialogTitle>
-                        <DialogDescription className="text-[#8a8279]">
+                        <DialogDescription className="text-[#6b7d99]">
                             Document content preview
                         </DialogDescription>
                     </DialogHeader>
                     <ScrollArea className="max-h-[70vh] pr-4">
-                        <div className="rounded-xl border border-[#e5e0d8] bg-[#faf6f1] p-4">
-                            <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#3d3630]">
+                        <div className="rounded-xl border border-[#d0d9e8] bg-[#eef2f7] p-4">
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#1e2a3a]">
                                 {previewDoc?.content || "No content available."}
                             </p>
                         </div>

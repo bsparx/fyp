@@ -78,60 +78,60 @@ export function StatsClient({ stats }: StatsClientProps) {
         <div className="grid gap-6">
             {/* Summary Cards */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-[#3d3630]">Total Documents</CardTitle>
-                        <FileText className="h-4 w-4 text-[#8a8279]" />
+                        <CardTitle className="text-sm font-medium text-[#1e2a3a]">Total Documents</CardTitle>
+                        <FileText className="h-4 w-4 text-[#6b7d99]" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-[#3d3630]">{stats.totalDocuments}</div>
-                        <p className="text-xs text-[#8a8279]">{stats.ingestedDocuments} ingested</p>
+                        <div className="text-2xl font-bold text-[#1e2a3a]">{stats.totalDocuments}</div>
+                        <p className="text-xs text-[#6b7d99]">{stats.ingestedDocuments} ingested</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-[#3d3630]">Parent Chunks</CardTitle>
-                        <Layers className="h-4 w-4 text-[#8a8279]" />
+                        <CardTitle className="text-sm font-medium text-[#1e2a3a]">Parent Chunks</CardTitle>
+                        <Layers className="h-4 w-4 text-[#6b7d99]" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-[#3d3630]">{stats.totalParentChunks.toLocaleString()}</div>
-                        <p className="text-xs text-[#8a8279]">Grouped content sections</p>
+                        <div className="text-2xl font-bold text-[#1e2a3a]">{stats.totalParentChunks.toLocaleString()}</div>
+                        <p className="text-xs text-[#6b7d99]">Grouped content sections</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-[#3d3630]">RAG Chunks</CardTitle>
-                        <Database className="h-4 w-4 text-[#8a8279]" />
+                        <CardTitle className="text-sm font-medium text-[#1e2a3a]">RAG Chunks</CardTitle>
+                        <Database className="h-4 w-4 text-[#6b7d99]" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-[#3d3630]">{stats.totalRagChunks.toLocaleString()}</div>
-                        <p className="text-xs text-[#8a8279]">Vectors in Pinecone</p>
+                        <div className="text-2xl font-bold text-[#1e2a3a]">{stats.totalRagChunks.toLocaleString()}</div>
+                        <p className="text-xs text-[#6b7d99]">Vectors in Pinecone</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-[#3d3630]">Ingestion Rate</CardTitle>
-                        <CheckCircle className="h-4 w-4 text-[#8a8279]" />
+                        <CardTitle className="text-sm font-medium text-[#1e2a3a]">Ingestion Rate</CardTitle>
+                        <CheckCircle className="h-4 w-4 text-[#6b7d99]" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-[#3d3630]">{stats.ingestionRate.toFixed(1)}%</div>
-                        <Progress value={stats.ingestionRate} className="mt-2 h-1.5 bg-[#e8e4e0]" />
+                        <div className="text-2xl font-bold text-[#1e2a3a]">{stats.ingestionRate.toFixed(1)}%</div>
+                        <Progress value={stats.ingestionRate} className="mt-2 h-1.5 bg-[#dce3f0]" />
                     </CardContent>
                 </Card>
             </div>
 
             {/* Charts Row 1 */}
             <div className="grid gap-6 lg:grid-cols-2">
-                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                     <CardHeader>
                         <div className="flex items-center gap-2">
-                            <TrendingUp className="h-4 w-4 text-[#8a8279]" />
-                            <CardTitle className="text-[#3d3630]">Documents Over Time</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-[#6b7d99]" />
+                            <CardTitle className="text-[#1e2a3a]">Documents Over Time</CardTitle>
                         </div>
-                        <CardDescription className="text-[#8a8279]">Document uploads in the last 30 days</CardDescription>
+                        <CardDescription className="text-[#6b7d99]">Document uploads in the last 30 days</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {stats.documentsPerDay.length > 0 ? (
@@ -147,17 +147,17 @@ export function StatsClient({ stats }: StatsClientProps) {
                                     <XAxis
                                         dataKey="date"
                                         tickFormatter={(value) => new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                        tick={{ fill: "#8a8279", fontSize: 12 }}
+                                        tick={{ fill: "#6b7d99", fontSize: 12 }}
                                         tickLine={false}
                                         axisLine={false}
                                     />
-                                    <YAxis tick={{ fill: "#8a8279", fontSize: 12 }} tickLine={false} axisLine={false} />
+                                    <YAxis tick={{ fill: "#6b7d99", fontSize: 12 }} tickLine={false} axisLine={false} />
                                     <ChartTooltip content={<ChartTooltipContent />} />
                                     <Area type="monotone" dataKey="count" stroke="hsl(var(--chart-1))" fillOpacity={1} fill="url(#colorCount)" />
                                 </AreaChart>
                             </ChartContainer>
                         ) : (
-                            <div className="flex h-[250px] items-center justify-center text-[#8a8279]">
+                            <div className="flex h-[250px] items-center justify-center text-[#6b7d99]">
                                 <div className="text-center">
                                     <Activity className="mx-auto h-8 w-8 opacity-50" />
                                     <p className="mt-2">No data available</p>
@@ -167,13 +167,13 @@ export function StatsClient({ stats }: StatsClientProps) {
                     </CardContent>
                 </Card>
 
-                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                     <CardHeader>
                         <div className="flex items-center gap-2">
-                            <PieChartIcon className="h-4 w-4 text-[#8a8279]" />
-                            <CardTitle className="text-[#3d3630]">Document Status</CardTitle>
+                            <PieChartIcon className="h-4 w-4 text-[#6b7d99]" />
+                            <CardTitle className="text-[#1e2a3a]">Document Status</CardTitle>
                         </div>
-                        <CardDescription className="text-[#8a8279]">Ingested vs pending documents</CardDescription>
+                        <CardDescription className="text-[#6b7d99]">Ingested vs pending documents</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {stats.totalDocuments > 0 ? (
@@ -198,7 +198,7 @@ export function StatsClient({ stats }: StatsClientProps) {
                                 </PieChart>
                             </ChartContainer>
                         ) : (
-                            <div className="flex h-[250px] items-center justify-center text-[#8a8279]">
+                            <div className="flex h-[250px] items-center justify-center text-[#6b7d99]">
                                 <div className="text-center">
                                     <PieChartIcon className="mx-auto h-8 w-8 opacity-50" />
                                     <p className="mt-2">No documents yet</p>
@@ -211,25 +211,25 @@ export function StatsClient({ stats }: StatsClientProps) {
 
             {/* Charts Row 2 */}
             <div className="grid gap-6 lg:grid-cols-2">
-                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                     <CardHeader>
                         <div className="flex items-center gap-2">
-                            <BarChart3 className="h-4 w-4 text-[#8a8279]" />
-                            <CardTitle className="text-[#3d3630]">Chunks per Document</CardTitle>
+                            <BarChart3 className="h-4 w-4 text-[#6b7d99]" />
+                            <CardTitle className="text-[#1e2a3a]">Chunks per Document</CardTitle>
                         </div>
-                        <CardDescription className="text-[#8a8279]">Top 10 documents by chunk count</CardDescription>
+                        <CardDescription className="text-[#6b7d99]">Top 10 documents by chunk count</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {stats.chunksPerDocument.length > 0 ? (
                             <ChartContainer config={barChartConfig} className="h-[300px] w-full">
                                 <BarChart data={stats.chunksPerDocument} layout="vertical" margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                                    <XAxis type="number" tick={{ fill: "#8a8279", fontSize: 12 }} tickLine={false} axisLine={false} />
+                                    <XAxis type="number" tick={{ fill: "#6b7d99", fontSize: 12 }} tickLine={false} axisLine={false} />
                                     <YAxis
                                         dataKey="title"
                                         type="category"
                                         width={120}
-                                        tick={{ fill: "#8a8279", fontSize: 12 }}
+                                        tick={{ fill: "#6b7d99", fontSize: 12 }}
                                         tickLine={false}
                                         axisLine={false}
                                         tickFormatter={(value) => (value.length > 15 ? value.substring(0, 15) + "..." : value)}
@@ -240,7 +240,7 @@ export function StatsClient({ stats }: StatsClientProps) {
                                 </BarChart>
                             </ChartContainer>
                         ) : (
-                            <div className="flex h-[300px] items-center justify-center text-[#8a8279]">
+                            <div className="flex h-[300px] items-center justify-center text-[#6b7d99]">
                                 <div className="text-center">
                                     <BarChart3 className="mx-auto h-8 w-8 opacity-50" />
                                     <p className="mt-2">No ingested documents</p>
@@ -250,38 +250,38 @@ export function StatsClient({ stats }: StatsClientProps) {
                     </CardContent>
                 </Card>
 
-                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                     <CardHeader>
                         <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-[#8a8279]" />
-                            <CardTitle className="text-[#3d3630]">Recent Documents</CardTitle>
+                            <Clock className="h-4 w-4 text-[#6b7d99]" />
+                            <CardTitle className="text-[#1e2a3a]">Recent Documents</CardTitle>
                         </div>
-                        <CardDescription className="text-[#8a8279]">Latest uploaded documents</CardDescription>
+                        <CardDescription className="text-[#6b7d99]">Latest uploaded documents</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {stats.recentDocuments.length > 0 ? (
                             <div className="space-y-3">
                                 {stats.recentDocuments.map((doc) => (
-                                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-[#f5f0eb] transition-colors">
+                                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-[#e3e8f2] transition-colors">
                                         <div className="flex items-center gap-3">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f0e6c8]/40">
-                                                <FileText className="h-5 w-5 text-[#8b7355]" />
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dbe4f5]/40">
+                                                <FileText className="h-5 w-5 text-[#5b7cfa]" />
                                             </div>
                                             <div>
-                                                <p className="font-medium leading-none text-[#3d3630]">
+                                                <p className="font-medium leading-none text-[#1e2a3a]">
                                                     {doc.title.length > 30 ? doc.title.substring(0, 30) + "..." : doc.title}
                                                 </p>
-                                                <p className="text-sm text-[#8a8279]">{formatDate(doc.createdAt)}</p>
+                                                <p className="text-sm text-[#6b7d99]">{formatDate(doc.createdAt)}</p>
                                             </div>
                                         </div>
-                                        <Badge variant={doc.isIngested ? "default" : "secondary"} className={doc.isIngested ? "bg-[#8fa68e]/15 text-[#6b8a6a] border-none hover:bg-[#8fa68e]/25" : "bg-[#c49a6c]/15 text-[#a07848] border-none hover:bg-[#c49a6c]/25"}>
+                                        <Badge variant={doc.isIngested ? "default" : "secondary"} className={doc.isIngested ? "bg-[#4ade80]/15 text-[#22c55e] border-none hover:bg-[#4ade80]/25" : "bg-[#8aa4f0]/15 text-[#d97706] border-none hover:bg-[#8aa4f0]/25"}>
                                             {doc.isIngested ? "Ingested" : "Pending"}
                                         </Badge>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="flex h-[200px] items-center justify-center text-[#8a8279]">
+                            <div className="flex h-[200px] items-center justify-center text-[#6b7d99]">
                                 <div className="text-center">
                                     <FileText className="mx-auto h-8 w-8 opacity-50" />
                                     <p className="mt-2">No documents yet</p>
@@ -293,29 +293,29 @@ export function StatsClient({ stats }: StatsClientProps) {
             </div>
 
             {/* Summary Statistics */}
-            <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+            <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                 <CardHeader>
-                    <CardTitle className="text-[#3d3630]">Summary</CardTitle>
-                    <CardDescription className="text-[#8a8279]">Key metrics at a glance</CardDescription>
+                    <CardTitle className="text-[#1e2a3a]">Summary</CardTitle>
+                    <CardDescription className="text-[#6b7d99]">Key metrics at a glance</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="flex flex-col gap-1">
-                            <span className="text-sm text-[#8a8279]">Avg Chunks per Document</span>
-                            <span className="text-2xl font-bold text-[#3d3630]">{stats.avgChunksPerDocument.toFixed(1)}</span>
+                            <span className="text-sm text-[#6b7d99]">Avg Chunks per Document</span>
+                            <span className="text-2xl font-bold text-[#1e2a3a]">{stats.avgChunksPerDocument.toFixed(1)}</span>
                         </div>
                         <div className="flex flex-col gap-1">
-                            <span className="text-sm text-[#8a8279]">Parent to RAG Ratio</span>
-                            <span className="text-2xl font-bold text-[#3d3630]">
+                            <span className="text-sm text-[#6b7d99]">Parent to RAG Ratio</span>
+                            <span className="text-2xl font-bold text-[#1e2a3a]">
                                 {stats.totalParentChunks > 0 ? `1:${(stats.totalRagChunks / stats.totalParentChunks).toFixed(1)}` : "N/A"}
                             </span>
                         </div>
                         <div className="flex flex-col gap-1">
-                            <span className="text-sm text-[#8a8279]">Pending Documents</span>
-                            <span className="text-2xl font-bold text-[#3d3630]">{stats.totalDocuments - stats.ingestedDocuments}</span>
+                            <span className="text-sm text-[#6b7d99]">Pending Documents</span>
+                            <span className="text-2xl font-bold text-[#1e2a3a]">{stats.totalDocuments - stats.ingestedDocuments}</span>
                         </div>
                         <div className="flex flex-col gap-1">
-                            <span className="text-sm text-[#8a8279]">Database Health</span>
+                            <span className="text-sm text-[#6b7d99]">Database Health</span>
                             <Badge
                                 variant={stats.ingestionRate === 100 ? "default" : stats.ingestionRate >= 80 ? "secondary" : "destructive"}
                                 className="w-fit mt-1"

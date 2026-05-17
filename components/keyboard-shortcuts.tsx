@@ -39,10 +39,10 @@ export function KeyboardShortcutsDialog() {
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent className="border-[#e5e0d8] bg-[#fdfcf9] max-w-md">
+            <DialogContent className="border-[#d0d9e8] bg-[#ffffff] max-w-md">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-[#3d3630]">
-                        <Keyboard className="size-5 text-[#8b7355]" />
+                    <DialogTitle className="flex items-center gap-2 text-[#1e2a3a]">
+                        <Keyboard className="size-5 text-[#5b7cfa]" />
                         Keyboard Shortcuts
                     </DialogTitle>
                 </DialogHeader>
@@ -50,20 +50,20 @@ export function KeyboardShortcutsDialog() {
                     {shortcuts.map((shortcut) => (
                         <div
                             key={shortcut.description}
-                            className="flex items-center justify-between p-2.5 rounded-lg hover:bg-[#f5f0eb] transition-colors"
+                            className="flex items-center justify-between p-2.5 rounded-lg hover:bg-[#eef2f7] transition-colors"
                         >
                             <div className="flex items-center gap-2.5">
-                                <shortcut.icon className="size-4 text-[#8a8279]" />
-                                <span className="text-sm text-[#3d3630]">{shortcut.description}</span>
+                                <shortcut.icon className="size-4 text-[#6b7d99]" />
+                                <span className="text-sm text-[#1e2a3a]">{shortcut.description}</span>
                             </div>
                             <div className="flex items-center gap-1">
                                 {shortcut.keys.map((key, i) => (
                                     <span key={i} className="flex items-center">
-                                        <kbd className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-md border border-[#e5e0d8] bg-[#f5f0eb] text-[10px] font-mono font-medium text-[#3d3630]">
+                                        <kbd className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-md border border-[#d0d9e8] bg-[#eef2f7] text-[10px] font-mono font-medium text-[#1e2a3a]">
                                             {key}
                                         </kbd>
                                         {i < shortcut.keys.length - 1 && (
-                                            <span className="mx-1 text-[#8a8279]">+</span>
+                                            <span className="mx-1 text-[#6b7d99]">+</span>
                                         )}
                                     </span>
                                 ))}

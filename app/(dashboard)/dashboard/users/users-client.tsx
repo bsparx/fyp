@@ -78,10 +78,10 @@ function CopyButton({ text }: { text: string }) {
     return (
         <button
             onClick={handleCopy}
-            className="text-[#8a8279] hover:text-[#8b7355] transition-colors p-1 rounded hover:bg-[#f0e6c8]/30"
+            className="text-[#6b7d99] hover:text-[#5b7cfa] transition-colors p-1 rounded hover:bg-[#dbe4f5]/30"
             title="Copy"
         >
-            {copied ? <Check className="size-3 text-[#8fa68e]" /> : <Copy className="size-3" />}
+            {copied ? <Check className="size-3 text-[#4ade80]" /> : <Copy className="size-3" />}
         </button>
     )
 }
@@ -294,43 +294,43 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
     return (
         <>
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#e5e0d8] bg-[#fdfcf9]">
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#d0d9e8] bg-[#ffffff]">
                 <div className="flex items-center gap-2 px-6">
-                    <SidebarTrigger className="-ml-1 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/40" />
-                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]" />
+                    <SidebarTrigger aria-label="Toggle sidebar" className="-ml-1 text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/40" />
+                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4 bg-[#d0d9e8]" />
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/dashboard" className="text-[#8a8279] hover:text-[#3d3630]">Dashboard</BreadcrumbLink>
+                                <BreadcrumbLink href="/dashboard" className="text-[#6b7d99] hover:text-[#1e2a3a]">Dashboard</BreadcrumbLink>
                             </BreadcrumbItem>
-                            <BreadcrumbSeparator className="hidden md:block text-[#e5e0d8]" />
+                            <BreadcrumbSeparator className="hidden md:block text-[#d0d9e8]" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage className="text-[#3d3630] font-medium">All Users</BreadcrumbPage>
+                                <BreadcrumbPage className="text-[#1e2a3a] font-medium">All Users</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
                 </div>
             </header>
 
-            <div className="flex flex-1 flex-col gap-6 p-6 pt-4 bg-[#faf6f1]">
+            <div className="flex flex-1 flex-col gap-6 p-6 pt-4 bg-[#eef2f7]">
                 {/* Header */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-[#3d3630]">User Management</h1>
-                        <p className="text-[#8a8279] mt-1 text-sm">
+                        <h1 className="text-2xl font-bold tracking-tight text-[#1e2a3a]">User Management</h1>
+                        <p className="text-[#6b7d99] mt-1 text-sm">
                             Manage and monitor all users in your hospital system.
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="icon" onClick={handleRefresh} className="border-[#e5e0d8] bg-[#fdfcf9] text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/30">
+                        <Button variant="outline" size="icon" onClick={handleRefresh} aria-label="Refresh user list" className="border-[#d0d9e8] bg-[#ffffff] text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/30">
                             <RefreshCw className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" onClick={handleExportCSV} className="gap-2 border-[#e5e0d8] text-[#3d3630] hover:bg-[#f0e6c8]/30">
+                        <Button variant="outline" onClick={handleExportCSV} className="gap-2 border-[#d0d9e8] text-[#1e2a3a] hover:bg-[#dbe4f5]/30">
                             <Download className="h-4 w-4" />
                             Export
                         </Button>
                         <Link href="/dashboard/users/new">
-                            <Button className="gap-2 bg-[#8b7355] hover:bg-[#6b5a42] text-white">
+                            <Button className="gap-2 bg-[#5b7cfa] hover:bg-[#4a5fd9] text-white">
                                 <Plus className="h-4 w-4" />
                                 Create User
                             </Button>
@@ -344,14 +344,14 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                         const meta = roleMeta[role]
                         const count = users.filter((u) => u.role === role).length
                         return (
-                            <Card key={role} className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                            <Card key={role} className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                                 <CardContent className="p-4 flex items-center gap-4">
                                     <div className={`rounded-xl p-2.5 ${meta.badge.replace("text-", "bg-").replace("700", "100").split(" ")[0]}`}>
                                         <meta.icon className="size-5" />
                                     </div>
                                     <div>
-                                        <p className="text-xs text-[#8a8279] font-medium uppercase tracking-wide">{meta.label}s</p>
-                                        <p className="text-xl font-bold text-[#3d3630]">{count}</p>
+                                        <p className="text-xs text-[#6b7d99] font-medium uppercase tracking-wide">{meta.label}s</p>
+                                        <p className="text-xl font-bold text-[#1e2a3a]">{count}</p>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -360,11 +360,11 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                 </div>
 
                 {/* User Table Card */}
-                <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm overflow-hidden">
+                <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm overflow-hidden">
                     {/* Search and Filter Header */}
-                    <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#e5e0d8]">
+                    <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#d0d9e8]">
                         <div className="relative flex-1 max-w-sm">
-                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8279]" />
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7d99]" />
                             <Input
                                 ref={searchInputRef}
                                 placeholder="Search users by name, email... (press /)"
@@ -373,7 +373,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                                     setSearchQuery(e.target.value)
                                     setCurrentPage(1)
                                 }}
-                                className="pl-9 bg-[#fdfcf9] border-[#e5e0d8] text-[#3d3630] placeholder:text-[#8a8279]/60"
+                                className="pl-9 bg-[#ffffff] border-[#d0d9e8] text-[#1e2a3a] placeholder:text-[#6b7d99]/60"
                             />
                         </div>
                         <div className="flex items-center gap-3">
@@ -385,8 +385,8 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                                         onClick={() => { setRoleFilter(r); setCurrentPage(1) }}
                                         className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${
                                             roleFilter === r
-                                                ? "bg-[#3d3630] text-[#faf6f1] border-[#3d3630]"
-                                                : "bg-[#fdfcf9] text-[#8a8279] border-[#e5e0d8] hover:border-[#c4a882]/40 hover:text-[#3d3630]"
+                                                ? "bg-[#1e2a3a] text-[#eef2f7] border-[#1e2a3a]"
+                                                : "bg-[#ffffff] text-[#6b7d99] border-[#d0d9e8] hover:border-[#8aa4f0]/40 hover:text-[#1e2a3a]"
                                         }`}
                                     >
                                         {r === "ALL" ? "All" : roleMeta[r].label}
@@ -400,27 +400,27 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow className="border-[#e5e0d8] hover:bg-transparent">
-                                    <TableHead className="text-[#8a8279] font-medium cursor-pointer select-none" onClick={() => handleSort("name")}>
+                                <TableRow className="border-[#d0d9e8] hover:bg-transparent">
+                                    <TableHead className="text-[#6b7d99] font-medium cursor-pointer select-none" onClick={() => handleSort("name")}>
                                         <span className="flex items-center gap-1">User {sortColumn === "name" && (sortDirection === "asc" ? "↑" : "↓")}</span>
                                     </TableHead>
-                                    <TableHead className="text-[#8a8279] font-medium hidden md:table-cell cursor-pointer select-none" onClick={() => handleSort("email")}>
+                                    <TableHead className="text-[#6b7d99] font-medium hidden md:table-cell cursor-pointer select-none" onClick={() => handleSort("email")}>
                                         <span className="flex items-center gap-1">Email {sortColumn === "email" && (sortDirection === "asc" ? "↑" : "↓")}</span>
                                     </TableHead>
-                                    <TableHead className="text-[#8a8279] font-medium cursor-pointer select-none" onClick={() => handleSort("role")}>
+                                    <TableHead className="text-[#6b7d99] font-medium cursor-pointer select-none" onClick={() => handleSort("role")}>
                                         <span className="flex items-center gap-1">Role {sortColumn === "role" && (sortDirection === "asc" ? "↑" : "↓")}</span>
                                     </TableHead>
-                                    <TableHead className="text-[#8a8279] font-medium hidden lg:table-cell cursor-pointer select-none" onClick={() => handleSort("createdAt")}>
+                                    <TableHead className="text-[#6b7d99] font-medium hidden lg:table-cell cursor-pointer select-none" onClick={() => handleSort("createdAt")}>
                                         <span className="flex items-center gap-1">Created {sortColumn === "createdAt" && (sortDirection === "asc" ? "↑" : "↓")}</span>
                                     </TableHead>
-                                    <TableHead className="text-[#8a8279] font-medium text-right">Actions</TableHead>
+                                    <TableHead className="text-[#6b7d99] font-medium text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {paginatedUsers.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={5} className="h-32 text-center">
-                                            <div className="flex flex-col items-center justify-center text-[#8a8279]">
+                                            <div className="flex flex-col items-center justify-center text-[#6b7d99]">
                                                 <Users className="h-10 w-10 mb-3 opacity-40" />
                                                 <p className="text-sm font-medium">
                                                     {users.length === 0 ? "No users found." : "No users match your filters."}
@@ -435,10 +435,10 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                                     paginatedUsers.map((user) => {
                                         const meta = roleMeta[user.role]
                                         return (
-                                            <TableRow key={user.id} className="border-[#e5e0d8]/60 hover:bg-[#f5f0eb]/50 transition-colors">
+                                            <TableRow key={user.id} className="border-[#d0d9e8]/60 hover:bg-[#e3e8f2]/50 transition-colors">
                                                 <TableCell className="py-3">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f0e6c8]/60 font-medium text-[#8b7355]">
+                                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dbe4f5]/60 font-medium text-[#5b7cfa]">
                                                             {(user.name || user.email)
                                                                 .split(" ")
                                                                 .map((n) => n[0])
@@ -447,12 +447,12 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                                                                 .toUpperCase()}
                                                         </div>
                                                         <div>
-                                                            <p className="font-medium text-[#3d3630]">{user.name || "Unnamed User"}</p>
-                                                            <p className="text-xs text-[#8a8279] md:hidden">{user.email}</p>
+                                                            <p className="font-medium text-[#1e2a3a]">{user.name || "Unnamed User"}</p>
+                                                            <p className="text-xs text-[#6b7d99] md:hidden">{user.email}</p>
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="hidden md:table-cell text-[#3d3630]">
+                                                <TableCell className="hidden md:table-cell text-[#1e2a3a]">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-sm">{user.email}</span>
                                                         <CopyButton text={user.email} />
@@ -464,7 +464,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                                                         {meta.label}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className="hidden lg:table-cell text-[#8a8279]">
+                                                <TableCell className="hidden lg:table-cell text-[#6b7d99]">
                                                     <span className="text-sm" title={new Date(user.createdAt).toLocaleString()}>
                                                         {timeAgo(user.createdAt)}
                                                     </span>
@@ -472,15 +472,15 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-1">
                                                         {user.role === "ADMIN" ? (
-                                                            <Badge variant="outline" className="border-[#e5e0d8] text-[#8a8279] bg-[#f5f0eb]/50 text-[10px]">
+                                                            <Badge variant="outline" className="border-[#d0d9e8] text-[#6b7d99] bg-[#e3e8f2]/50 text-[10px]">
                                                                 Protected
                                                             </Badge>
                                                         ) : (
                                                             <>
-                                                                <Button variant="ghost" size="icon" onClick={() => openEditDialog(user)} className="text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/30">
+                                                                <Button variant="ghost" size="icon" onClick={() => openEditDialog(user)} aria-label={`Edit user ${user.name || user.email}`} className="text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/30">
                                                                     <Pencil className="h-4 w-4" />
                                                                 </Button>
-                                                                <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => openDeleteDialog(user)}>
+                                                                <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => openDeleteDialog(user)} aria-label={`Delete user ${user.name || user.email}`}>
                                                                     <Trash2 className="h-4 w-4" />
                                                                 </Button>
                                                             </>
@@ -497,8 +497,8 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                        <div className="flex items-center justify-between border-t border-[#e5e0d8] p-4">
-                            <p className="text-sm text-[#8a8279]">
+                        <div className="flex items-center justify-between border-t border-[#d0d9e8] p-4">
+                            <p className="text-sm text-[#6b7d99]">
                                 Page {currentPage} of {totalPages} • {sortedUsers.length} users
                             </p>
                             <div className="flex items-center gap-2">
@@ -507,7 +507,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                                     size="sm"
                                     onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                                     disabled={currentPage === 1}
-                                    className="border-[#e5e0d8] text-[#3d3630] hover:bg-[#f0e6c8]/30"
+                                    className="border-[#d0d9e8] text-[#1e2a3a] hover:bg-[#dbe4f5]/30"
                                 >
                                     <ChevronLeft className="h-4 w-4" />
                                     Previous
@@ -517,7 +517,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                                     size="sm"
                                     onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                                     disabled={currentPage === totalPages}
-                                    className="border-[#e5e0d8] text-[#3d3630] hover:bg-[#f0e6c8]/30"
+                                    className="border-[#d0d9e8] text-[#1e2a3a] hover:bg-[#dbe4f5]/30"
                                 >
                                     Next
                                     <ChevronRight className="h-4 w-4" />
@@ -530,23 +530,23 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
             {/* Edit User Dialog */}
             <Dialog open={!!editUserData} onOpenChange={(open) => !open && closeEditDialog()}>
-                <DialogContent className="sm:max-w-md border-[#e5e0d8] bg-[#fdfcf9]">
+                <DialogContent className="sm:max-w-md border-[#d0d9e8] bg-[#ffffff]">
                     <DialogHeader>
-                        <DialogTitle className="text-[#3d3630]">Edit User</DialogTitle>
+                        <DialogTitle className="text-[#1e2a3a]">Edit User</DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
-                            <span className="text-sm font-medium text-[#3d3630]">Username</span>
-                            <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Enter username" className="border-[#e5e0d8] bg-[#fdfcf9]" />
+                            <span className="text-sm font-medium text-[#1e2a3a]">Username</span>
+                            <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Enter username" className="border-[#d0d9e8] bg-[#ffffff]" />
                         </div>
                         <div className="grid gap-2">
-                            <span className="text-sm font-medium text-[#3d3630]">Email</span>
-                            <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="Enter email" className="border-[#e5e0d8] bg-[#fdfcf9]" />
+                            <span className="text-sm font-medium text-[#1e2a3a]">Email</span>
+                            <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="Enter email" className="border-[#d0d9e8] bg-[#ffffff]" />
                         </div>
                         <div className="grid gap-2">
-                            <span className="text-sm font-medium text-[#3d3630]">Role</span>
+                            <span className="text-sm font-medium text-[#1e2a3a]">Role</span>
                             <Select value={editRole} onValueChange={(value) => setEditRole(value as "ADMIN" | "DOCTOR" | "PATIENT")}>
-                                <SelectTrigger className="border-[#e5e0d8] bg-[#fdfcf9]">
+                                <SelectTrigger className="border-[#d0d9e8] bg-[#ffffff]">
                                     <SelectValue placeholder="Select role" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -558,10 +558,10 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={closeEditDialog} disabled={editLoading} className="border-[#e5e0d8]">
+                        <Button variant="outline" onClick={closeEditDialog} disabled={editLoading} className="border-[#d0d9e8]">
                             Cancel
                         </Button>
-                        <Button onClick={handleEditSubmit} disabled={editLoading} className="bg-[#8b7355] hover:bg-[#6b5a42] text-white">
+                        <Button onClick={handleEditSubmit} disabled={editLoading} className="bg-[#5b7cfa] hover:bg-[#4a5fd9] text-white">
                             {editLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Save Changes
                         </Button>
@@ -571,15 +571,15 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
             {/* Delete User Alert Dialog */}
             <AlertDialog open={!!deleteUserData} onOpenChange={(open) => !open && closeDeleteDialog()}>
-                <AlertDialogContent className="border-[#e5e0d8] bg-[#fdfcf9]">
+                <AlertDialogContent className="border-[#d0d9e8] bg-[#ffffff]">
                     <AlertDialogHeader>
-                        <AlertDialogTitle className="text-[#3d3630]">Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription className="text-[#8a8279]">
-                            This will permanently delete <strong className="text-[#3d3630]">{deleteUserData?.name || deleteUserData?.email}</strong> from both the database and Clerk. This action cannot be undone.
+                        <AlertDialogTitle className="text-[#1e2a3a]">Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-[#6b7d99]">
+                            This will permanently delete <strong className="text-[#1e2a3a]">{deleteUserData?.name || deleteUserData?.email}</strong> from both the database and Clerk. This action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel onClick={closeDeleteDialog} disabled={deleteLoading} className="border-[#e5e0d8]">Cancel</AlertDialogCancel>
+                        <AlertDialogCancel onClick={closeDeleteDialog} disabled={deleteLoading} className="border-[#d0d9e8]">Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={handleDeleteConfirm} disabled={deleteLoading} className="bg-red-600 hover:bg-red-700 text-white">
                             {deleteLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Delete

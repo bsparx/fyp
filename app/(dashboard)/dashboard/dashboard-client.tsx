@@ -122,16 +122,16 @@ const pieChartConfig = {
 const roleMeta: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ElementType }> = {
     DOCTOR: {
         label: "Doctors",
-        color: "text-[#7a9eaf]",
-        bg: "bg-[#7a9eaf]/10",
-        border: "border-[#7a9eaf]/20",
+        color: "text-[#38bdf8]",
+        bg: "bg-[#38bdf8]/10",
+        border: "border-[#38bdf8]/20",
         icon: Stethoscope,
     },
     PATIENT: {
         label: "Patients",
-        color: "text-[#8fa68e]",
-        bg: "bg-[#8fa68e]/10",
-        border: "border-[#8fa68e]/20",
+        color: "text-[#4ade80]",
+        bg: "bg-[#4ade80]/10",
+        border: "border-[#4ade80]/20",
         icon: HeartPulse,
     },
 }
@@ -201,9 +201,9 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
             change: `+${stats.totalUsers > 0 ? Math.max(1, Math.round(stats.totalUsers * 0.12)) : 0}`,
             trend: "up" as const,
             icon: Users,
-            color: "text-[#8b7355]",
-            bgColor: "bg-[#8b7355]/10",
-            borderColor: "border-[#8b7355]/20",
+            color: "text-[#5b7cfa]",
+            bgColor: "bg-[#5b7cfa]/10",
+            borderColor: "border-[#5b7cfa]/20",
             sparkline: [12, 18, 15, 25, 22, 30, 28, 35, 32, 40],
         },
         {
@@ -212,9 +212,9 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
             change: `+${stats.totalDocuments > 0 ? Math.max(1, Math.round(stats.totalDocuments * 0.05)) : 0}`,
             trend: "up" as const,
             icon: FileText,
-            color: "text-[#7a9eaf]",
-            bgColor: "bg-[#7a9eaf]/10",
-            borderColor: "border-[#7a9eaf]/20",
+            color: "text-[#38bdf8]",
+            bgColor: "bg-[#38bdf8]/10",
+            borderColor: "border-[#38bdf8]/20",
             sparkline: [8, 12, 10, 18, 15, 22, 20, 28, 25, 32],
         },
         {
@@ -223,9 +223,9 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
             change: "+18%",
             trend: "up" as const,
             icon: Database,
-            color: "text-[#8fa68e]",
-            bgColor: "bg-[#8fa68e]/10",
-            borderColor: "border-[#8fa68e]/20",
+            color: "text-[#4ade80]",
+            bgColor: "bg-[#4ade80]/10",
+            borderColor: "border-[#4ade80]/20",
             sparkline: [20, 25, 30, 28, 35, 42, 38, 48, 45, 55],
         },
         {
@@ -234,9 +234,9 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
             change: ingestionRate >= 95 ? "-1%" : "+2%",
             trend: ingestionRate >= 95 ? "down" as const : "up" as const,
             icon: Activity,
-            color: "text-[#c49a6c]",
-            bgColor: "bg-[#c49a6c]/10",
-            borderColor: "border-[#c49a6c]/20",
+            color: "text-[#8aa4f0]",
+            bgColor: "bg-[#8aa4f0]/10",
+            borderColor: "border-[#8aa4f0]/20",
             sparkline: [98, 97, 99, 98, 96, 98, 99, 97, 98, 98],
         },
     ]
@@ -247,32 +247,32 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
             description: "Add PDFs to the vector database",
             href: "/dashboard/upload",
             icon: Upload,
-            color: "#8b7355",
-            gradient: "from-[#8b7355]/20 to-[#8b7355]/5",
+            color: "#5b7cfa",
+            gradient: "from-[#5b7cfa]/20 to-[#5b7cfa]/5",
         },
         {
             title: "Manage Users",
             description: "Add, edit, or remove users",
             href: "/dashboard/users",
             icon: Users,
-            color: "#7a9eaf",
-            gradient: "from-[#7a9eaf]/20 to-[#7a9eaf]/5",
+            color: "#38bdf8",
+            gradient: "from-[#38bdf8]/20 to-[#38bdf8]/5",
         },
         {
             title: "Browse Database",
             description: "Search indexed documents",
             href: "/dashboard/database",
             icon: Search,
-            color: "#8fa68e",
-            gradient: "from-[#8fa68e]/20 to-[#8fa68e]/5",
+            color: "#4ade80",
+            gradient: "from-[#4ade80]/20 to-[#4ade80]/5",
         },
         {
             title: "View Statistics",
             description: "System analytics and metrics",
             href: "/dashboard/database/stats",
             icon: BarChart3,
-            color: "#c49a6c",
-            gradient: "from-[#c49a6c]/20 to-[#c49a6c]/5",
+            color: "#8aa4f0",
+            gradient: "from-[#8aa4f0]/20 to-[#8aa4f0]/5",
         },
     ]
 
@@ -284,45 +284,45 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
     ]
 
     const activityFeed = [
-        { icon: Users, color: "text-[#8fa68e]", bg: "bg-[#8fa68e]/10", title: `${stats.totalDoctors} doctors registered`, desc: `${stats.totalPatients} patients in system` },
-        { icon: FileText, color: "text-[#7a9eaf]", bg: "bg-[#7a9eaf]/10", title: `${stats.totalDocuments} documents stored`, desc: `${stats.ingestedDocuments} fully ingested` },
-        { icon: Database, color: "text-[#c49a6c]", bg: "bg-[#c49a6c]/10", title: `${stats.totalRagChunks.toLocaleString()} vectors indexed`, desc: `${stats.totalParentChunks.toLocaleString()} parent chunks` },
-        { icon: ShieldCheck, color: "text-[#8b7355]", bg: "bg-[#8b7355]/10", title: "Security scan completed", desc: "No issues found" },
-        { icon: Zap, color: "text-[#b8907a]", bg: "bg-[#b8907a]/10", title: "System backup finished", desc: "Took 4m 32s" },
+        { icon: Users, color: "text-[#4ade80]", bg: "bg-[#4ade80]/10", title: `${stats.totalDoctors} doctors registered`, desc: `${stats.totalPatients} patients in system` },
+        { icon: FileText, color: "text-[#38bdf8]", bg: "bg-[#38bdf8]/10", title: `${stats.totalDocuments} documents stored`, desc: `${stats.ingestedDocuments} fully ingested` },
+        { icon: Database, color: "text-[#8aa4f0]", bg: "bg-[#8aa4f0]/10", title: `${stats.totalRagChunks.toLocaleString()} vectors indexed`, desc: `${stats.totalParentChunks.toLocaleString()} parent chunks` },
+        { icon: ShieldCheck, color: "text-[#5b7cfa]", bg: "bg-[#5b7cfa]/10", title: "Security scan completed", desc: "No issues found" },
+        { icon: Zap, color: "text-[#fbbf24]", bg: "bg-[#fbbf24]/10", title: "System backup finished", desc: "Took 4m 32s" },
     ]
 
     return (
         <>
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#e5e0d8] bg-[#fdfcf9]">
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[#d0d9e8] bg-[#ffffff]">
                 <div className="flex items-center gap-2 px-6">
-                    <SidebarTrigger className="-ml-1 text-[#8a8279] hover:text-[#3d3630] hover:bg-[#f0e6c8]/40" />
-                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4 bg-[#e5e0d8]" />
+                    <SidebarTrigger aria-label="Toggle sidebar" className="-ml-1 text-[#6b7d99] hover:text-[#1e2a3a] hover:bg-[#dbe4f5]/40" />
+                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4 bg-[#d0d9e8]" />
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem>
-                                <BreadcrumbPage className="text-[#3d3630] font-medium">Dashboard</BreadcrumbPage>
+                                <BreadcrumbPage className="text-[#1e2a3a] font-medium">Dashboard</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
                 </div>
             </header>
 
-            <div className="flex flex-1 flex-col gap-6 p-6 pt-4 bg-[#faf6f1]">
+            <div className="flex flex-1 flex-col gap-6 p-6 pt-4 bg-[#eef2f7]">
                 {/* Welcome Section */}
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="secondary" className="rounded-full px-3 py-1 bg-[#f0e6c8]/60 text-[#8b7355] border-none font-medium text-xs">
+                            <Badge variant="secondary" className="rounded-full px-3 py-1 bg-[#dbe4f5]/60 text-[#5b7cfa] border-none font-medium text-xs">
                                 <Sparkles className="size-3 mr-1" />
                                 Overview
                             </Badge>
-                            <Badge variant="outline" className="rounded-full px-3 py-1 text-[#8a8279] border-[#e5e0d8] text-xs">
-                                <div className="size-1.5 rounded-full bg-[#8fa68e] mr-1.5 animate-pulse" />
+                            <Badge variant="outline" className="rounded-full px-3 py-1 text-[#6b7d99] border-[#d0d9e8] text-xs">
+                                <div className="size-1.5 rounded-full bg-[#4ade80] mr-1.5 animate-pulse" />
                                 Realtime
                             </Badge>
                         </div>
-                        <h1 className="text-3xl font-bold tracking-tight text-[#3d3630]">Hospital Management System</h1>
-                        <p className="text-[#8a8279] mt-1 text-sm max-w-xl">
+                        <h1 className="text-3xl font-bold tracking-tight text-[#1e2a3a]">Hospital Management System</h1>
+                        <p className="text-[#6b7d99] mt-1 text-sm max-w-xl">
                             Welcome back. Here's what's happening across your healthcare infrastructure.
                         </p>
                     </div>
@@ -330,12 +330,12 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                         <button
                             onClick={handleRefresh}
                             disabled={refreshing}
-                            className="flex items-center gap-1.5 text-xs text-[#8a8279] bg-[#fdfcf9] border border-[#e5e0d8] rounded-full px-3 py-1.5 shadow-sm hover:bg-[#f5f0eb] transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1.5 text-xs text-[#6b7d99] bg-[#ffffff] border border-[#d0d9e8] rounded-full px-3 py-1.5 shadow-sm hover:bg-[#e3e8f2] transition-colors disabled:opacity-50"
                         >
                             <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
                             <span>Refresh</span>
                         </button>
-                        <div className="flex items-center gap-1.5 text-xs text-[#8a8279] bg-[#fdfcf9] border border-[#e5e0d8] rounded-full px-3 py-1.5 shadow-sm">
+                        <div className="flex items-center gap-1.5 text-xs text-[#6b7d99] bg-[#ffffff] border border-[#d0d9e8] rounded-full px-3 py-1.5 shadow-sm">
                             <Clock className="size-3.5" />
                             <span>Last updated: {timeAgo(lastUpdated)}</span>
                         </div>
@@ -346,7 +346,7 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     {refreshing ? (
                         Array.from({ length: 4 }).map((_, i) => (
-                            <Card key={`skeleton-${i}`} className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm overflow-hidden">
+                            <Card key={`skeleton-${i}`} className="border-[#d0d9e8] bg-[#ffffff] shadow-sm overflow-hidden">
                                 <CardContent className="p-5">
                                     <div className="flex items-start justify-between">
                                         <Skeleton className="h-10 w-10 rounded-xl" />
@@ -361,14 +361,14 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                         ))
                     ) : (
                         statCards.map((stat) => (
-                            <Card key={stat.title} className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm hover:shadow-md transition-all duration-300 group overflow-hidden">
+                            <Card key={stat.title} className="border-[#d0d9e8] bg-[#ffffff] shadow-sm hover:shadow-md transition-all duration-300 group overflow-hidden">
                                 <CardContent className="p-5">
                                     <div className="flex items-start justify-between">
                                         <div className={`rounded-xl ${stat.bgColor} p-2.5 border ${stat.borderColor}`}>
                                             <stat.icon className={`size-5 ${stat.color}`} />
                                         </div>
                                         <div className="flex flex-col items-end">
-                                            <div className={`flex items-center gap-0.5 text-xs font-medium ${stat.trend === "up" ? "text-[#8fa68e]" : "text-[#c4705a]"}`}>
+                                            <div className={`flex items-center gap-0.5 text-xs font-medium ${stat.trend === "up" ? "text-[#4ade80]" : "text-[#e74c3c]"}`}>
                                                 {stat.trend === "up" ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
                                                 {stat.change}
                                             </div>
@@ -376,8 +376,8 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                                         </div>
                                     </div>
                                     <div className="mt-3">
-                                        <p className="text-xs text-[#8a8279] font-medium uppercase tracking-wide">{stat.title}</p>
-                                        <h3 className="text-2xl font-bold text-[#3d3630] mt-0.5">{stat.value}</h3>
+                                        <p className="text-xs text-[#6b7d99] font-medium uppercase tracking-wide">{stat.title}</p>
+                                        <h3 className="text-2xl font-bold text-[#1e2a3a] mt-0.5">{stat.value}</h3>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -388,11 +388,11 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                 {/* Role Breakdown + Charts Row */}
                 <div className="grid gap-6 lg:grid-cols-7">
                     {/* Area Chart - Takes 4 columns */}
-                    <Card className="lg:col-span-4 border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                    <Card className="lg:col-span-4 border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                         <CardHeader className="flex flex-row items-start justify-between pb-2">
                             <div>
-                                <CardTitle className="text-base font-semibold text-[#3d3630]">Document Uploads</CardTitle>
-                                <CardDescription className="text-[#8a8279] text-sm mt-0.5">
+                                <CardTitle className="text-base font-semibold text-[#1e2a3a]">Document Uploads</CardTitle>
+                                <CardDescription className="text-[#6b7d99] text-sm mt-0.5">
                                     Last 14 days of document activity
                                 </CardDescription>
                             </div>
@@ -412,13 +412,13 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                                         tickLine={false}
                                         axisLine={false}
                                         tickMargin={8}
-                                        tick={{ fill: "#8a8279", fontSize: 12 }}
+                                        tick={{ fill: "#6b7d99", fontSize: 12 }}
                                         tickFormatter={(value) => {
                                             const date = new Date(value)
                                             return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
                                         }}
                                     />
-                                    <YAxis tickLine={false} axisLine={false} tickMargin={8} tick={{ fill: "#8a8279", fontSize: 12 }} />
+                                    <YAxis tickLine={false} axisLine={false} tickMargin={8} tick={{ fill: "#6b7d99", fontSize: 12 }} />
                                     <ChartTooltip
                                         cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1, strokeDasharray: "4 4" }}
                                         content={<ChartTooltipContent indicator="dot" />}
@@ -431,10 +431,10 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
 
                     {/* Pie Chart + Role breakdown - Takes 3 columns */}
                     <div className="lg:col-span-3 flex flex-col gap-6">
-                        <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm flex-1">
+                        <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm flex-1">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-base font-semibold text-[#3d3630]">Document Status</CardTitle>
-                                <CardDescription className="text-[#8a8279] text-sm mt-0.5">
+                                <CardTitle className="text-base font-semibold text-[#1e2a3a]">Document Status</CardTitle>
+                                <CardDescription className="text-[#6b7d99] text-sm mt-0.5">
                                     Ingested vs pending
                                 </CardDescription>
                             </CardHeader>
@@ -466,17 +466,17 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                                             <div key={item.name} className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
                                                     <div className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                                                    <span className="text-sm text-[#3d3630]">{item.name}</span>
+                                                    <span className="text-sm text-[#1e2a3a]">{item.name}</span>
                                                 </div>
-                                                <span className="text-sm font-medium text-[#3d3630]">{item.value}</span>
+                                                <span className="text-sm font-medium text-[#1e2a3a]">{item.value}</span>
                                             </div>
                                         ))}
-                                        <div className="pt-2 border-t border-[#e5e0d8]">
+                                        <div className="pt-2 border-t border-[#d0d9e8]">
                                             <div className="flex items-center justify-between">
-                                                <span className="text-sm text-[#8a8279]">Ingestion Rate</span>
-                                                <span className="text-sm font-bold text-[#3d3630]">{ingestionRate.toFixed(1)}%</span>
+                                                <span className="text-sm text-[#6b7d99]">Ingestion Rate</span>
+                                                <span className="text-sm font-bold text-[#1e2a3a]">{ingestionRate.toFixed(1)}%</span>
                                             </div>
-                                            <Progress value={ingestionRate} className="h-1.5 mt-1.5 bg-[#e8e4e0]" />
+                                            <Progress value={ingestionRate} className="h-1.5 mt-1.5 bg-[#dce3f0]" />
                                         </div>
                                     </div>
                                 </div>
@@ -488,10 +488,10 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                 {/* Second Row: User Growth + Activity */}
                 <div className="grid gap-6 lg:grid-cols-7">
                     {/* Bar Chart - Takes 4 columns */}
-                    <Card className="lg:col-span-4 border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                    <Card className="lg:col-span-4 border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-base font-semibold text-[#3d3630]">User Growth</CardTitle>
-                            <CardDescription className="text-[#8a8279] text-sm mt-0.5">
+                            <CardTitle className="text-base font-semibold text-[#1e2a3a]">User Growth</CardTitle>
+                            <CardDescription className="text-[#6b7d99] text-sm mt-0.5">
                                 New users per month (last 6 months)
                             </CardDescription>
                         </CardHeader>
@@ -499,8 +499,8 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                             <ChartContainer config={barChartConfig} className="aspect-auto h-[260px] w-full">
                                 <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                     <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                    <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} tick={{ fill: "#8a8279", fontSize: 12 }} />
-                                    <YAxis tickLine={false} axisLine={false} tickMargin={8} tick={{ fill: "#8a8279", fontSize: 12 }} />
+                                    <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} tick={{ fill: "#6b7d99", fontSize: 12 }} />
+                                    <YAxis tickLine={false} axisLine={false} tickMargin={8} tick={{ fill: "#6b7d99", fontSize: 12 }} />
                                     <ChartTooltip cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} content={<ChartTooltipContent indicator="dashed" />} />
                                     <Bar dataKey="users" fill="var(--color-users)" radius={[4, 4, 0, 0]} />
                                 </BarChart>
@@ -510,10 +510,10 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
 
                     {/* System Health + Activity - Takes 3 columns */}
                     <div className="lg:col-span-3 flex flex-col gap-6">
-                        <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                        <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-base font-semibold text-[#3d3630]">System Health</CardTitle>
-                                <CardDescription className="text-[#8a8279] text-sm mt-0.5">
+                                <CardTitle className="text-base font-semibold text-[#1e2a3a]">System Health</CardTitle>
+                                <CardDescription className="text-[#6b7d99] text-sm mt-0.5">
                                     Real-time service status
                                 </CardDescription>
                             </CardHeader>
@@ -521,37 +521,37 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                                 {systemStatus.map((service) => (
                                     <div key={service.label} className="space-y-1.5">
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-[#3d3630] font-medium">{service.label}</span>
+                                            <span className="text-[#1e2a3a] font-medium">{service.label}</span>
                                             <div className="flex items-center gap-1.5">
                                                 {service.status === "healthy" ? (
-                                                    <CheckCircle2 className="size-3.5 text-[#8fa68e]" />
+                                                    <CheckCircle2 className="size-3.5 text-[#4ade80]" />
                                                 ) : (
-                                                    <AlertCircle className="size-3.5 text-[#c49a6c]" />
+                                                    <AlertCircle className="size-3.5 text-[#8aa4f0]" />
                                                 )}
-                                                <span className={`text-xs font-medium ${service.status === "healthy" ? "text-[#8fa68e]" : "text-[#c49a6c]"}`}>
+                                                <span className={`text-xs font-medium ${service.status === "healthy" ? "text-[#4ade80]" : "text-[#8aa4f0]"}`}>
                                                     {service.status === "healthy" ? "Healthy" : "Warning"}
                                                 </span>
                                             </div>
                                         </div>
-                                        <Progress value={service.value} className="h-2 bg-[#e8e4e0]" />
+                                        <Progress value={service.value} className="h-2 bg-[#dce3f0]" />
                                     </div>
                                 ))}
                             </CardContent>
                         </Card>
 
-                        <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm flex-1">
+                        <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm flex-1">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-base font-semibold text-[#3d3630]">Recent Activity</CardTitle>
+                                <CardTitle className="text-base font-semibold text-[#1e2a3a]">Recent Activity</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-1">
                                 {activityFeed.map((item, i) => (
-                                    <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[#f5f0eb] transition-colors">
+                                    <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[#e3e8f2] transition-colors">
                                         <div className={`rounded-lg ${item.bg} p-2 shrink-0`}>
                                             <item.icon className={`size-4 ${item.color}`} />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-[#3d3630]">{item.title}</p>
-                                            <p className="text-xs text-[#8a8279]">{item.desc}</p>
+                                            <p className="text-sm font-medium text-[#1e2a3a]">{item.title}</p>
+                                            <p className="text-xs text-[#6b7d99]">{item.desc}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -563,10 +563,10 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                 {/* Quick Actions + Recent Uploads */}
                 <div className="grid gap-6 lg:grid-cols-3">
                     {/* Quick Actions */}
-                    <Card className="border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                    <Card className="border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                         <CardHeader className="pb-3">
-                            <CardTitle className="text-base font-semibold text-[#3d3630]">Quick Actions</CardTitle>
-                            <CardDescription className="text-[#8a8279] text-sm">Common tasks and workflows</CardDescription>
+                            <CardTitle className="text-base font-semibold text-[#1e2a3a]">Quick Actions</CardTitle>
+                            <CardDescription className="text-[#6b7d99] text-sm">Common tasks and workflows</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="grid gap-3">
@@ -574,19 +574,19 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                                     <a
                                         key={action.title}
                                         href={action.href}
-                                        className="group flex items-center gap-4 p-3.5 rounded-xl border border-[#e5e0d8] bg-gradient-to-r hover:shadow-sm transition-all duration-200 hover:border-[#c4a882]/30"
+                                        className="group flex items-center gap-4 p-3.5 rounded-xl border border-[#d0d9e8] bg-gradient-to-r hover:shadow-sm transition-all duration-200 hover:border-[#8aa4f0]/30"
                                     >
-                                        <div className={`rounded-xl p-2.5 bg-gradient-to-br ${action.gradient} border border-[#e5e0d8]/50`}>
+                                        <div className={`rounded-xl p-2.5 bg-gradient-to-br ${action.gradient} border border-[#d0d9e8]/50`}>
                                             <action.icon className="size-5" style={{ color: action.color }} />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-1">
-                                                <p className="font-medium text-sm text-[#3d3630] group-hover:text-[#8b7355] transition-colors">
+                                                <p className="font-medium text-sm text-[#1e2a3a] group-hover:text-[#5b7cfa] transition-colors">
                                                     {action.title}
                                                 </p>
-                                                <ArrowUpRight className="size-3.5 text-[#8a8279] opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                <ArrowUpRight className="size-3.5 text-[#6b7d99] opacity-0 group-hover:opacity-100 transition-opacity" />
                                             </div>
-                                            <p className="text-xs text-[#8a8279] mt-0.5">{action.description}</p>
+                                            <p className="text-xs text-[#6b7d99] mt-0.5">{action.description}</p>
                                         </div>
                                     </a>
                                 ))}
@@ -595,14 +595,14 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                     </Card>
 
                     {/* Recent Uploads */}
-                    <Card className="lg:col-span-2 border-[#e5e0d8] bg-[#fdfcf9] shadow-sm">
+                    <Card className="lg:col-span-2 border-[#d0d9e8] bg-[#ffffff] shadow-sm">
                         <CardHeader className="pb-3">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <CardTitle className="text-base font-semibold text-[#3d3630]">Recent Uploads</CardTitle>
-                                    <CardDescription className="text-[#8a8279] text-sm mt-0.5">Latest documents added to the system</CardDescription>
+                                    <CardTitle className="text-base font-semibold text-[#1e2a3a]">Recent Uploads</CardTitle>
+                                    <CardDescription className="text-[#6b7d99] text-sm mt-0.5">Latest documents added to the system</CardDescription>
                                 </div>
-                                <a href="/dashboard/upload" className="text-xs font-medium text-[#8b7355] hover:text-[#6b5a42] hover:underline transition-colors">
+                                <a href="/dashboard/upload" className="text-xs font-medium text-[#5b7cfa] hover:text-[#4a5fd9] hover:underline transition-colors">
                                     View all
                                 </a>
                             </div>
@@ -611,35 +611,35 @@ export default function DashboardClient({ initialStats }: { initialStats: Dashbo
                             <div className="space-y-1">
                                 {stats.recentDocuments.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-8 text-center">
-                                        <FileText className="size-10 text-[#8a8279]/40" />
-                                        <p className="mt-3 text-sm text-[#8a8279]">No documents uploaded yet</p>
-                                        <a href="/dashboard/upload" className="mt-1 text-xs text-[#8b7355] hover:underline">Upload your first document</a>
+                                        <FileText className="size-10 text-[#6b7d99]/40" />
+                                        <p className="mt-3 text-sm text-[#6b7d99]">No documents uploaded yet</p>
+                                        <a href="/dashboard/upload" className="mt-1 text-xs text-[#5b7cfa] hover:underline">Upload your first document</a>
                                     </div>
                                 ) : (
                                     stats.recentDocuments.map((file, i) => (
                                         <div
                                             key={file.id}
-                                            className="flex items-center justify-between p-3 rounded-lg hover:bg-[#f5f0eb] transition-colors group"
+                                            className="flex items-center justify-between p-3 rounded-lg hover:bg-[#e3e8f2] transition-colors group"
                                         >
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <div className="rounded-lg bg-[#f0e6c8]/40 p-2 shrink-0 group-hover:bg-[#f0e6c8]/60 transition-colors">
-                                                    <FileText className="size-4 text-[#8b7355]" />
+                                                <div className="rounded-lg bg-[#dbe4f5]/40 p-2 shrink-0 group-hover:bg-[#dbe4f5]/60 transition-colors">
+                                                    <FileText className="size-4 text-[#5b7cfa]" />
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="text-sm font-medium text-[#3d3630] truncate">{file.title}</p>
-                                                    <p className="text-xs text-[#8a8279]">
+                                                    <p className="text-sm font-medium text-[#1e2a3a] truncate">{file.title}</p>
+                                                    <p className="text-xs text-[#6b7d99]">
                                                         {new Date(file.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                                     </p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3 shrink-0">
                                                 {file.isIngested ? (
-                                                    <Badge variant="secondary" className="rounded-full text-[10px] px-2 py-0.5 bg-[#8fa68e]/15 text-[#6b8a6a] border-none">
+                                                    <Badge variant="secondary" className="rounded-full text-[10px] px-2 py-0.5 bg-[#4ade80]/15 text-[#22c55e] border-none">
                                                         <CheckCircle2 className="size-3 mr-1" />
                                                         Done
                                                     </Badge>
                                                 ) : (
-                                                    <Badge variant="secondary" className="rounded-full text-[10px] px-2 py-0.5 bg-[#c49a6c]/15 text-[#a07848] border-none">
+                                                    <Badge variant="secondary" className="rounded-full text-[10px] px-2 py-0.5 bg-[#8aa4f0]/15 text-[#d97706] border-none">
                                                         <Clock className="size-3 mr-1" />
                                                         Pending
                                                     </Badge>
