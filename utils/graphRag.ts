@@ -122,9 +122,9 @@ const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD;
 const NEO4J_DATABASE = process.env.NEO4J_DATABASE || "neo4j";
 const KG_EXTRACTOR_BASE_URL =
   process.env.KG_EXTRACTOR_BASE_URL ??
-  "https://muddasirjaved10--example-qwen3-5-9b-awq-inference-vllmse-a9b4c2.modal.run/v1";
+  "https://bsparx64--example-qwen3-6-27b-awq-inference2-vllmserver-serve.modal.run";
 const KG_EXTRACTOR_MODEL =
-  process.env.KG_EXTRACTOR_MODEL ?? "cyankiwi/Qwen3.5-9B-AWQ-4bit";
+  process.env.KG_EXTRACTOR_MODEL ?? "Intel/Qwen3.6-27B-int4-AutoRound";
 const KG_EXTRACTOR_API_KEY =
   process.env.KG_EXTRACTOR_API_KEY ??
   process.env.OPENAI_API_KEY ??
